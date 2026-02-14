@@ -2,6 +2,21 @@
 
 MCP Stdio Server providing Zig 0.16 tools and resources for AI coding assistants.
 
+## Quick Test Commands
+
+To test if the MCP server is working:
+
+```bash
+# Test initialize
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce
+
+# Test tools/list
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce
+
+# Test zig_version tool
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_version","arguments":{}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce
+```
+
 ## Workflow for Adding/Fixing Resources
 
 ### Step 1: Edit the source
