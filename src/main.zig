@@ -159,7 +159,8 @@ fn buildToolsListResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![]
     try list.appendSlice(allocator, "{\"name\":\"zig_version\",\"description\":\"Show installed Zig version\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_build\",\"description\":\"Build the Zig project\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_run\",\"description\":\"Run a Zig file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to .zig file to run\"}},\"required\":[\"file\"]}},");
-    try list.appendSlice(allocator, "{\"name\":\"zig_patterns\",\"description\":\"Get Zig 0.16 patterns and examples (ArrayList, HashMap, JSON, I/O, Error Handling)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\",\"description\":\"Pattern name: arraylist, hashmap, json, io, allocator, error_handling, build_template, zon_template, guidelines, or list for all\"}},\"required\":[]}}");
+    try list.appendSlice(allocator, "{\"name\":\"zig_patterns\",\"description\":\"Get Zig 0.16 patterns and examples (ArrayList, HashMap, JSON, I/O, Error Handling)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\",\"description\":\"Pattern name: arraylist, hashmap, json, io, allocator, error_handling, build_template, zon_template, guidelines, or list for all\"}},\"required\":[]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_help\",\"description\":\"Show help and bash fallback commands when MCP client fails\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}}");
 
     try list.appendSlice(allocator, "]}}");
 
@@ -1394,6 +1395,82 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
     return list.toOwnedSlice(allocator);
 }
 
+fn getHelpDocumentation(allocator: std.mem.Allocator) ![]u8 {
+    const help_text =
+        \\Zig MCP Server - Help & Bash Fallback Commands
+        \\================================================
+        \\
+        \\When MCP client fails or times out, use these bash commands:
+        \\
+        \\--------------------------------------------------
+        \\1. LIST ALL AVAILABLE PATTERNS
+        \\--------------------------------------------------
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"list"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -m json.tool
+        \\
+        \\--------------------------------------------------
+        \\2. GET SPECIFIC PATTERN DOCUMENTATION
+        \\--------------------------------------------------
+        \\# ArrayList patterns
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"arraylist"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# HashMap patterns
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"hashmap"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# I/O patterns (stdin/stdout/stderr)
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"io"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# JSON patterns
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"json"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# Memory allocator patterns
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"allocator"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# Error handling patterns
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"error_handling"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# build.zig template
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"build_template"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# build.zig.zon template
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"zon_template"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\# Complete Zig 0.16 guidelines
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patterns","arguments":{"pattern":"guidelines"}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\--------------------------------------------------
+        \\3. LIST ALL TOOLS
+        \\--------------------------------------------------
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -m json.tool
+        \\
+        \\--------------------------------------------------
+        \\4. GET ZIG VERSION
+        \\--------------------------------------------------
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_version","arguments":{}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\--------------------------------------------------
+        \\5. BUILD ZIG PROJECT
+        \\--------------------------------------------------
+        \\echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_build","arguments":{}}}' | /home/seven/repos/zig/mcp/zig-out/bin/bruce 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['content'][0]['text'])"
+        \\
+        \\--------------------------------------------------
+        \\AVAILABLE PATTERNS:
+        \\--------------------------------------------------
+        \\  - arraylist      : ArrayList usage patterns
+        \\  - hashmap        : HashMap usage patterns
+        \\  - json           : JSON parsing/stringifying
+        \\  - io             : I/O patterns (stdin/stdout/stderr)
+        \\  - allocator      : Memory allocator patterns
+        \\  - error_handling : Error handling techniques
+        \\  - build_template : build.zig template
+        \\  - zon_template   : build.zig.zon template
+        \\  - guidelines     : Complete Zig 0.16 guidelines
+        \\  - list           : Show all available patterns
+        \\
+        \\TIP: Save these commands to a script for easy access!
+    ;
+    return allocator.dupe(u8, help_text);
+}
+
 fn executeTool(init: std.process.Init, allocator: std.mem.Allocator, name: []const u8, args: ?std.json.Value) ![]u8 {
     if (std.mem.eql(u8, name, "zig_version")) {
         return try runCommand(init, allocator, &.{ "zig", "version" });
@@ -1410,6 +1487,8 @@ fn executeTool(init: std.process.Init, allocator: std.mem.Allocator, name: []con
         const pattern = if (args) |a| a.object.get("pattern") else null;
         const pattern_str = if (pattern) |p| p.string else "list";
         return try getPatternDocumentation(allocator, pattern_str);
+    } else if (std.mem.eql(u8, name, "zig_help")) {
+        return try getHelpDocumentation(allocator);
     } else {
         return try concatStrings(allocator, &.{ "Unknown tool: ", name });
     }
