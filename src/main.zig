@@ -210,6 +210,7 @@ fn buildToolsListResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![]
     try list.appendSlice(allocator, "{\"name\":\"zig_build\",\"description\":\"Build the Zig project\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_run\",\"description\":\"Run a Zig file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to .zig file to run\"}},\"required\":[\"file\"]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_patterns\",\"description\":\"Get Zig 0.16 patterns and examples (ArrayList, HashMap, JSON, I/O, Error Handling)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\",\"description\":\"Pattern name: arraylist, hashmap, json, io, allocator, error_handling, build_template, zon_template, guidelines, or list for all\"}},\"required\":[]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_resources\",\"description\":\"List all available MCP resources (patterns, templates, guidelines)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_help\",\"description\":\"Show help and bash fallback commands when MCP client fails\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}}");
 
     try list.appendSlice(allocator, "]}}");
@@ -1477,6 +1478,48 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
     return list.toOwnedSlice(allocator);
 }
 
+fn getResourcesDocumentation(allocator: std.mem.Allocator) ![]u8 {
+    const resources_text =
+        \\Zig MCP Server - Available Resources
+        \\======================================
+        \\
+        \\This server provides the following MCP resources that you can read:
+        \\
+        \\PATTERNS (Code Examples):
+        \\-------------------------
+        \\zig://patterns/arraylist    - ArrayList usage with .empty, initCapacity, append
+        \\zig://patterns/hashmap     - StringHashMap usage with put, get, iterator
+        \\zig://patterns/json        - JSON parsing with parseFromSlice and stringifyAlloc
+        \\zig://patterns/io          - I/O patterns with Reader, Writer, flush
+        \\zig://patterns/allocator   - Arena, GPA, FixedBuffer allocators
+        \\
+        \\TEMPLATES:
+        \\----------
+        \\zig://templates/build.zig     - build.zig template for Zig 0.16
+        \\zig://templates/build.zig.zon - Package manifest template
+        \\
+        \\GUIDELINES:
+        \\-----------
+        \\zig://guidelines/0.16    - Complete Zig 0.16 guidelines
+        \\
+        \\HOW TO USE RESOURCES:
+        \\----------------------
+        \\To read a resource, use the MCP resources/read method with the URI.
+        \\Example: "Can you read zig://patterns/arraylist?"
+        \\Or use tools: zig_patterns, zig_version, zig_build, zig_run
+        \\
+        \\AVAILABLE TOOLS:
+        \\-----------------
+        \\- zig_version     : Show Zig version
+        \\- zig_build       : Build project
+        \\- zig_run         : Run a .zig file
+        \\- zig_patterns   : Get pattern documentation
+        \\- zig_resources  : List all resources (this tool)
+        \\- zig_help        : Show help and fallback commands
+    ;
+    return allocator.dupe(u8, resources_text);
+}
+
 fn getHelpDocumentation(allocator: std.mem.Allocator) ![]u8 {
     const help_text =
         \\Zig MCP Server - Help & Bash Fallback Commands
@@ -1569,6 +1612,8 @@ fn executeTool(init: std.process.Init, allocator: std.mem.Allocator, name: []con
         const pattern = if (args) |a| a.object.get("pattern") else null;
         const pattern_str = if (pattern) |p| p.string else "list";
         return try getPatternDocumentation(allocator, pattern_str);
+    } else if (std.mem.eql(u8, name, "zig_resources")) {
+        return try getResourcesDocumentation(allocator);
     } else if (std.mem.eql(u8, name, "zig_help")) {
         return try getHelpDocumentation(allocator);
     } else {
