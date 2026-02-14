@@ -174,11 +174,12 @@ fn buildResourcesListResponse(allocator: std.mem.Allocator, id: ?std.json.Value)
 
     try list.appendSlice(allocator, ",\"result\":{\"resources\":[");
 
-    try list.appendSlice(allocator, "{\"uri\":\"zig://guidelines/0.16\",\"name\":\"Zig 0.16 Guidelines\",\"description\":\"Complete guide to Zig 0.16 patterns, breaking changes, and best practices\",\"mimeType\":\"text/markdown\"},");
-    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/arraylist\",\"name\":\"ArrayList Patterns\",\"description\":\"Correct ArrayList usage in Zig 0.16 - stateless APIs\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://guidelines/0.16\",\"name\":\"Zig 0.16 Guidelines\",\"description\":\"Complete guide to Zig 0.16 patterns\",\"mimeType\":\"text/markdown\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/arraylist\",\"name\":\"ArrayList Patterns\",\"description\":\"Correct ArrayList usage in Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/hashmap\",\"name\":\"HashMap Patterns\",\"description\":\"Correct HashMap/StringHashMap usage in Zig 0.16\",\"mimeType\":\"text/zig\"},");
-    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/io\",\"name\":\"I/O Patterns\",\"description\":\"std.io, Io.Reader, Io.Writer patterns in Zig 0.16\",\"mimeType\":\"text/zig\"},");
-    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/allocator\",\"name\":\"Allocator Patterns\",\"description\":\"When to pass allocators, stored allocators, and arena allocators\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/io\",\"name\":\"I/O Patterns\",\"description\":\"std.Io, Reader, Writer patterns in Zig 0.16\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/allocator\",\"name\":\"Allocator Patterns\",\"description\":\"When and how to use allocators in Zig 0.16\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/json\",\"name\":\"JSON Patterns\",\"description\":\"Parse and stringify JSON in Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://templates/build.zig\",\"name\":\"build.zig Template\",\"description\":\"Modern build.zig template for Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://templates/build.zig.zon\",\"name\":\"build.zig.zon Template\",\"description\":\"Package manifest structure for Zig 0.16\",\"mimeType\":\"text/zon\"}");
 
@@ -407,6 +408,49 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\- Use .empty para inicializar
         \\- Passe allocator para TODOS os métodos
         \\- Fonte: stdlib (array_list.zig, hash_map.zig)
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/json")) {
+        return 
+        \\// JSON Patterns in Zig 0.16
+        \\
+        \\const std = @import("std");
+        \\
+        \\// Define your struct
+        \\const Person = struct {
+        \\    name: []const u8,
+        \\    age: u32,
+        \\};
+        \\
+        \\pub fn main() !void {
+        \\    const allocator = std.heap.page_allocator;
+        \\
+        \\    // Parse JSON string to struct
+        \\    const json_str = "{\"name\":\"Alice\",\"age\":30}";
+        \\    var parsed = try std.json.parseFromSlice(Person, allocator, json_str, .{});
+        \\    defer parsed.deinit();
+        \\
+        \\    std.debug.print("Name: {s}, Age: {}\n", .{ parsed.value.name, parsed.value.age });
+        \\
+        \\    // Stringify struct to JSON string
+        \\    const person = Person{ .name = "Bob", .age = 25 };
+        \\    const json_output = try std.json.stringifyAlloc(allocator, person, .{});
+        \\    defer allocator.free(json_output);
+        \\
+        \\    std.debug.print("JSON: {s}\n", .{json_output});
+        \\}
+        \\
+        \\// Key Points:
+        \\// - parseFromSlice(Type, allocator, json_str, .{}) returns ParseOptions
+        \\// - parsed.value contains the parsed struct
+        \\// - ALWAYS call parsed.deinit() to free memory
+        \\// - stringifyAlloc(allocator, value, .{}) returns allocated string
+        \\// - ALWAYS free the returned string with allocator.free()
+        \\
+        \\// For nested objects, use std.json.Value:
+        \\// var parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_str, .{});
+        \\// defer parsed.deinit();
+        \\// const name = parsed.value.object.get("name").?.string;
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://templates/build.zig")) {
