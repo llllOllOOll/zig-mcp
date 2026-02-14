@@ -834,24 +834,48 @@ fn handleToolsCall(init: std.process.Init, allocator: std.mem.Allocator, id: ?st
     }
 
     if (tool_name) |name| {
-        const result = try executeTool(init, allocator, name, tool_args);
+        const result = executeTool(init, allocator, name, tool_args) catch |err| {
+            const err_msg = try std.fmt.allocPrint(allocator, "Tool error: {}", .{err});
+            defer allocator.free(err_msg);
+            try list.appendSlice(allocator, ",\"error\":{\"code\":-32603,\"message\":\"");
+            try list.appendSlice(allocator, err_msg);
+            try list.appendSlice(allocator, "\"}");
+            try list.appendSlice(allocator, "}");
+            return list.toOwnedSlice(allocator);
+        };
         defer allocator.free(result);
 
-        try list.appendSlice(allocator, ",\"result\":{\"content\":[");
-        try list.appendSlice(allocator, "{\"type\":\"text\",\"text\":\"");
-
-        for (result) |byte| {
-            switch (byte) {
-                '"' => try list.appendSlice(allocator, "\\\""),
-                '\\' => try list.appendSlice(allocator, "\\\\"),
-                '\n' => try list.appendSlice(allocator, "\\n"),
-                '\r' => try list.appendSlice(allocator, "\\r"),
-                '\t' => try list.appendSlice(allocator, "\\t"),
-                else => try list.append(allocator, byte),
+        // Check if result is an error message
+        if (result.len > 6 and std.mem.eql(u8, result[0..6], "Error:") or (result.len > 8 and std.mem.eql(u8, result[0..8], "Unknown "))) {
+            try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"");
+            for (result) |byte| {
+                switch (byte) {
+                    '"' => try list.appendSlice(allocator, "\\\""),
+                    '\\' => try list.appendSlice(allocator, "\\\\"),
+                    '\n' => try list.appendSlice(allocator, "\\n"),
+                    '\r' => try list.appendSlice(allocator, "\\r"),
+                    '\t' => try list.appendSlice(allocator, "\\t"),
+                    else => try list.append(allocator, byte),
+                }
             }
-        }
+            try list.appendSlice(allocator, "\"}");
+        } else {
+            try list.appendSlice(allocator, ",\"result\":{\"content\":[");
+            try list.appendSlice(allocator, "{\"type\":\"text\",\"text\":\"");
 
-        try list.appendSlice(allocator, "\"}]}");
+            for (result) |byte| {
+                switch (byte) {
+                    '"' => try list.appendSlice(allocator, "\\\""),
+                    '\\' => try list.appendSlice(allocator, "\\\\"),
+                    '\n' => try list.appendSlice(allocator, "\\n"),
+                    '\r' => try list.appendSlice(allocator, "\\r"),
+                    '\t' => try list.appendSlice(allocator, "\\t"),
+                    else => try list.append(allocator, byte),
+                }
+            }
+
+            try list.appendSlice(allocator, "\"}]}");
+        }
     } else {
         try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"Missing tool name\"}");
     }
