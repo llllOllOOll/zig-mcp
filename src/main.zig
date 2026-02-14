@@ -837,7 +837,7 @@ fn handleToolsCall(init: std.process.Init, allocator: std.mem.Allocator, id: ?st
         const result = try executeTool(init, allocator, name, tool_args);
         defer allocator.free(result);
 
-        try list.appendSlice(allocator, ",\"content\":[");
+        try list.appendSlice(allocator, ",\"result\":{\"content\":[");
         try list.appendSlice(allocator, "{\"type\":\"text\",\"text\":\"");
 
         for (result) |byte| {
@@ -851,7 +851,7 @@ fn handleToolsCall(init: std.process.Init, allocator: std.mem.Allocator, id: ?st
             }
         }
 
-        try list.appendSlice(allocator, "\"}]");
+        try list.appendSlice(allocator, "\"}]}");
     } else {
         try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"Missing tool name\"}");
     }
