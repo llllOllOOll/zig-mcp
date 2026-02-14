@@ -33,3 +33,20 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zig_patter
 # List resources
 echo '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' | ./zig-out/bin/bruce
 ```
+
+## OpenCode Configuration
+
+Add to your `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "zig-mcp": {
+      "type": "local",
+      "command": ["bash", "-c", "exec /home/seven/repos/zig/mcp/zig-out/bin/bruce"],
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
+}
+```
