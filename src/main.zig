@@ -209,7 +209,10 @@ fn buildToolsListResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![]
     try list.appendSlice(allocator, "{\"name\":\"zig_version\",\"description\":\"Show installed Zig version\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_build\",\"description\":\"Build the Zig project\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_run\",\"description\":\"Run a Zig file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to .zig file to run\"}},\"required\":[\"file\"]}},");
-    try list.appendSlice(allocator, "{\"name\":\"zig_patterns\",\"description\":\"Get Zig 0.16 patterns and examples (ArrayList, HashMap, JSON, I/O, Error Handling)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\",\"description\":\"Pattern name: arraylist, hashmap, json, io, allocator, error_handling, build_template, zon_template, guidelines, or list for all\"}},\"required\":[]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_test\",\"description\":\"Run Zig tests\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_fetch\",\"description\":\"Fetch Zig dependencies\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_fmt\",\"description\":\"Format Zig source files\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Path to file or directory (default: .)\"}},\"required\":[]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_patterns\",\"description\":\"Get Zig 0.16 patterns and examples (ArrayList, HashMap, JSON, I/O, Error Handling, Package, StaticLib, DynamicLib, MultiModule)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\",\"description\":\"Pattern name: arraylist, hashmap, json, io, allocator, error_handling, build_template, zon_template, package, static_lib, dynamic_lib, multimodule, guidelines, or list\"}},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_resources\",\"description\":\"List all available MCP resources (patterns, templates, guidelines)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_help\",\"description\":\"Show help and bash fallback commands when MCP client fails\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}}");
 
@@ -249,6 +252,10 @@ fn buildResourcesListResponse(allocator: std.mem.Allocator, id: ?std.json.Value)
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/io\",\"name\":\"I/O Patterns\",\"description\":\"std.Io, Reader, Writer patterns in Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/allocator\",\"name\":\"Allocator Patterns\",\"description\":\"When and how to use allocators in Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/json\",\"name\":\"JSON Patterns\",\"description\":\"Parse and stringify JSON in Zig 0.16\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/package\",\"name\":\"Package ZON Patterns\",\"description\":\"ZON package manifest with enum literals\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/static_lib\",\"name\":\"Static Library Patterns\",\"description\":\"Build static libraries with b.addLibrary\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/dynamic_lib\",\"name\":\"Dynamic Library Patterns\",\"description\":\"Build dynamic libraries with b.addLibrary\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/multimodule\",\"name\":\"Multi-Module Patterns\",\"description\":\"Multiple modules in one project\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://templates/build.zig\",\"name\":\"build.zig Template\",\"description\":\"Modern build.zig template for Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://templates/build.zig.zon\",\"name\":\"build.zig.zon Template\",\"description\":\"Package manifest structure for Zig 0.16\",\"mimeType\":\"text/zon\"}");
 
@@ -558,12 +565,167 @@ fn getResourceContent(uri: []const u8) []const u8 {
     } else if (std.mem.eql(u8, uri, "zig://templates/build.zig.zon")) {
         return 
         \\.{
-        \\    .name = \"my-project\",
-        \\    .version = \"0.1.0\",
+        \\    .name = "my-project",
+        \\    .version = "0.1.0",
         \\    .dependencies = .{
         \\        // Add dependencies here
         \\    },
         \\}
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/package")) {
+        return 
+        \\// ZON Package Manifest (build.zig.zon)
+        \\// IMPORTANT: Use enum literals (.name) not strings ("name")!
+        \\.{
+        \\    .name = .my_project,           // Enum literal, NOT string!
+        \\    .version = "0.1.0",
+        \\    .minimum_zig_version = "0.16.0",
+        \\    
+        \\    // Dependencies
+        \\    .dependencies = .{
+        \\        // .dependency_name = .{
+        \\        //     .url = "https://github.com/user/repo/archive/refs/tags/v1.0.0.tar.gz",
+        \\        //     .hash = "1220...",  // Get with: zig fetch --save <url>
+        \\        // },
+        \\    },
+        \\    
+        \\    // Package paths (included files)
+        \\    .paths = .{
+        \\        "build.zig",
+        \\        "build.zig.zon",
+        \\        "src",
+        \\        // "LICENSE",  // Optional
+        \\    },
+        \\}
+        \\
+        \\// Get hash after adding URL:
+        \\// zig fetch --save https://github.com/user/repo/archive/refs/tags/v1.0.0.tar.gz
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/static_lib")) {
+        return 
+        \\// Static Library Build (build.zig)
+        \\// Zig 0.16 uses b.addLibrary, NOT b.addStaticLibrary
+        \\
+        \\const std = @import("std");
+        \\
+        \\pub fn build(b: *std.Build) void {
+        \\    const target = b.standardTargetOptions(.{});
+        \\    const optimize = b.standardOptimizeOption(.{});
+        \\
+        \\    // Create static library
+        \\    const lib = b.addLibrary(.{
+        \\        .name = "mylib",
+        \\        .root_module = b.createModule(.{
+        \\            .root_source_file = b.path("src/lib.zig"),
+        \\            .target = target,
+        \\            .optimize = optimize,
+        \\        }),
+        \\        .linkage = .static,  // NOT "static_library"!
+        \\    });
+        \\
+        \\    b.installArtifact(lib);
+        \\    
+        \\    // Header-only or with source:
+        \\    // For header-only, use .header_export only
+        \\    // For with source, use .static
+        \\}
+        \\
+        \\// Key points:
+        \\// - b.addLibrary (NOT b.addStaticLibrary)
+        \\// - .linkage = .static (NOT "static_library")
+        \\// - Access module via lib.root_module (NOT lib.module)
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/dynamic_lib")) {
+        return 
+        \\// Dynamic Library Build (build.zig)
+        \\// Zig 0.16 uses b.addLibrary with .dynamic linkage
+        \\
+        \\const std = @import("std");
+        \\
+        \\pub fn build(b: *std.Build) void {
+        \\    const target = b.standardTargetOptions(.{});
+        \\    const optimize = b.standardOptimizeOption(.{});
+        \\
+        \\    // Create dynamic library
+        \\    const lib = b.addLibrary(.{
+        \\        .name = "mylib",
+        \\        .root_module = b.createModule(.{
+        \\            .root_source_file = b.path("src/lib.zig"),
+        \\            .target = target,
+        \\            .optimize = optimize,
+        \\        }),
+        \\        .linkage = .dynamic,
+        \\    });
+        \\    
+        \\    // Add system libraries to link against
+        \\    lib.linkSystemLibrary("ssl");
+        \\    lib.linkSystemLibrary("crypto");
+        \\
+        \\    b.installArtifact(lib);
+        \\}
+        \\
+        \\// Key points:
+        \\// - b.addLibrary with .linkage = .dynamic
+        \\// - lib.linkSystemLibrary("name") for system libs
+        \\// - Output: libmylib.so (Linux), libmylib.dylib (macOS), libmylib.dll (Windows)
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/multimodule")) {
+        return 
+        \\// Multi-Module Project (build.zig)
+        \\// Multiple modules in one project
+        \\
+        \\const std = @import("std");
+        \\
+        \\pub fn build(b: *std.Build) void {
+        \\    const target = b.standardTargetOptions(.{});
+        \\    const optimize = b.standardOptimizeOption(.{});
+        \\
+        \\    // Module 1: Core library
+        \\    const core_module = b.createModule(.{
+        \\        .root_source_file = b.path("src/core.zig"),
+        \\        .target = target,
+        \\        .optimize = optimize,
+        \\    });
+        \\
+        \\    // Module 2: Utils that depends on core
+        \\    const utils_module = b.createModule(.{
+        \\        .root_source_file = b.path("src/utils.zig"),
+        \\        .target = target,
+        \\        .optimize = optimize,
+        \\        .imports = &.{
+        \\            .{ .name = "core", .module = core_module },
+        \\        },
+        \\    });
+        \\
+        \\    // Executable using utils (which imports core)
+        \\    const exe = b.addExecutable(.{
+        \\        .name = "myapp",
+        \\        .root_module = b.createModule(.{
+        \\            .root_source_file = b.path("src/main.zig"),
+        \\            .target = target,
+        \\            .optimize = optimize,
+        \\            .imports = &.{
+        \\                .{ .name = "utils", .module = utils_module },
+        \\                .{ .name = "core", .module = core_module },
+        \\            },
+        \\        }),
+        \\    });
+        \\
+        \\    b.installArtifact(exe);
+        \\}
+        \\
+        \\// In main.zig:
+        \\// const utils = @import("utils");
+        \\// const core = @import("core");
+        \\
+        \\// Key points:
+        \\// - b.createModule() for each module
+        \\// - .imports to specify dependencies
+        \\// - .name is how you import in @import()
         \\
         ;
     }
@@ -912,9 +1074,80 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\  - error_handling : Error handling techniques
             \\  - build_template : build.zig template
             \\  - zon_template   : build.zig.zon template
+            \\  - package        : ZON package manifest (NEW!)
+            \\  - static_lib     : Static library build (NEW!)
+            \\  - dynamic_lib    : Dynamic library build (NEW!)
+            \\  - multimodule     : Multi-module project (NEW!)
             \\  - guidelines     : Complete Zig 0.16 guidelines
             \\  - list           : Show this list
             \\n            \\Example: zig_patterns with pattern="arraylist"
+        );
+    } else if (std.mem.eql(u8, pattern, "package")) {
+        return allocator.dupe(u8,
+            \\ZON Package Manifest (build.zig.zon)
+            \\=====================================
+            \\IMPORTANT: Use enum literals (.name) not strings ("name")!
+            \\.{
+            \\    .name = .my_project,           // Enum literal!
+            \\    .version = "0.1.0",
+            \\    .minimum_zig_version = "0.16.0",
+            \\    .dependencies = .{
+            \\        // .dep_name = .{
+            \\        //     .url = "https://...",
+            \\        //     .hash = "1220...",
+            \\        // },
+            \\    },
+            \\    .paths = .{"src", "build.zig"},
+            \\}
+            \\Run: zig fetch --save <url> to get hash
+        );
+    } else if (std.mem.eql(u8, pattern, "static_lib")) {
+        return allocator.dupe(u8,
+            \\Static Library Build (Zig 0.16)
+            \\===============================
+            \\const lib = b.addLibrary(.{
+            \\    .name = "mylib",
+            \\    .root_module = b.createModule(.{
+            \\        .root_source_file = b.path("src/lib.zig"),
+            \\    }),
+            \\    .linkage = .static,  // NOT "static_library"!
+            \\});
+            \\b.installArtifact(lib);
+            \\Key: b.addLibrary (NOT b.addStaticLibrary)
+        );
+    } else if (std.mem.eql(u8, pattern, "dynamic_lib")) {
+        return allocator.dupe(u8,
+            \\Dynamic Library Build (Zig 0.16)
+            \\================================
+            \\const lib = b.addLibrary(.{
+            \\    .name = "mylib",
+            \\    .root_module = b.createModule(.{
+            \\        .root_source_file = b.path("src/lib.zig"),
+            \\    }),
+            \\    .linkage = .dynamic,
+            \\});
+            \\lib.linkSystemLibrary("ssl");  // System libs
+            \\b.installArtifact(lib);
+        );
+    } else if (std.mem.eql(u8, pattern, "multimodule")) {
+        return allocator.dupe(u8,
+            \\Multi-Module Project (Zig 0.16)
+            \\=================================
+            \\// Module 1
+            \\const core = b.createModule(.{
+            \\    .root_source_file = b.path("src/core.zig"),
+            \\});
+            \\// Module 2 (depends on core)
+            \\const utils = b.createModule(.{
+            \\    .root_source_file = b.path("src/utils.zig"),
+            \\    .imports = &.{ .{ .name = "core", .module = core } },
+            \\});
+            \\// Executable
+            \\const exe = b.addExecutable(.{
+            \\    .root_module = b.createModule(.{
+            \\        .imports = &.{ .{ .name = "utils", .module = utils } },
+            \\    }),
+            \\});
         );
     } else if (std.mem.eql(u8, pattern, "arraylist")) {
         try list.appendSlice(allocator,
@@ -1608,6 +1841,14 @@ fn executeTool(init: std.process.Init, allocator: std.mem.Allocator, name: []con
             return try concatStrings(allocator, &.{"Error: No file provided"});
         }
         return try runCommand(init, allocator, &.{ "zig", "run", file_str });
+    } else if (std.mem.eql(u8, name, "zig_test")) {
+        return try runCommand(init, allocator, &.{ "zig", "test" });
+    } else if (std.mem.eql(u8, name, "zig_fetch")) {
+        return try runCommand(init, allocator, &.{ "zig", "fetch" });
+    } else if (std.mem.eql(u8, name, "zig_fmt")) {
+        const path = if (args) |a| a.object.get("path") else null;
+        const path_str = if (path) |p| p.string else ".";
+        return try runCommand(init, allocator, &.{ "zig", "fmt", path_str });
     } else if (std.mem.eql(u8, name, "zig_patterns")) {
         const pattern = if (args) |a| a.object.get("pattern") else null;
         const pattern_str = if (pattern) |p| p.string else "list";
