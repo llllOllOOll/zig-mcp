@@ -79,6 +79,22 @@ pub fn main(init: std.process.Init) !void {
             try stdout_writer.writeAll(response);
             try stdout_writer.writeAll("\n");
             try stdout_writer.flush();
+        } else if (std.mem.eql(u8, method, "prompts/list")) {
+            const response = try buildPromptsListResponse(allocator, id);
+            defer allocator.free(response);
+
+            try stderr_writer.print("Sending: {s}\n", .{response});
+            try stdout_writer.writeAll(response);
+            try stdout_writer.writeAll("\n");
+            try stdout_writer.flush();
+        } else if (std.mem.eql(u8, method, "prompts/get")) {
+            const response = try handlePromptsGet(allocator, id, value.object.get("params"));
+            defer allocator.free(response);
+
+            try stderr_writer.print("Sending: {s}\n", .{response});
+            try stdout_writer.writeAll(response);
+            try stdout_writer.writeAll("\n");
+            try stdout_writer.flush();
         } else if (std.mem.eql(u8, method, "initialized")) {
             // Notification, no response needed
         } else {
@@ -110,7 +126,7 @@ fn buildInitializeResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![
         }
     }
 
-    try list.appendSlice(allocator, ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"resources\":{}},\"serverInfo\":{\"name\":\"bruce\",\"version\":\"0.1.0\"}}}");
+    try list.appendSlice(allocator, ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"resources\":{},\"prompts\":{}},\"serverInfo\":{\"name\":\"bruce\",\"version\":\"0.1.0\"}}}");
 
     return list.toOwnedSlice(allocator);
 }
@@ -142,7 +158,8 @@ fn buildToolsListResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![]
 
     try list.appendSlice(allocator, "{\"name\":\"zig_version\",\"description\":\"Show installed Zig version\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
     try list.appendSlice(allocator, "{\"name\":\"zig_build\",\"description\":\"Build the Zig project\",\"inputSchema\":{\"type\":\"object\",\"properties\":{},\"required\":[]}},");
-    try list.appendSlice(allocator, "{\"name\":\"zig_run\",\"description\":\"Run a Zig file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to .zig file to run\"}},\"required\":[\"file\"]}}");
+    try list.appendSlice(allocator, "{\"name\":\"zig_run\",\"description\":\"Run a Zig file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to .zig file to run\"}},\"required\":[\"file\"]}},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_patterns\",\"description\":\"Get Zig 0.16 patterns and examples (ArrayList, HashMap, JSON, I/O, Error Handling)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\",\"description\":\"Pattern name: arraylist, hashmap, json, io, allocator, error_handling, build_template, zon_template, guidelines, or list for all\"}},\"required\":[]}}");
 
     try list.appendSlice(allocator, "]}}");
 
@@ -493,6 +510,243 @@ fn getResourceContent(uri: []const u8) []const u8 {
     return "Unknown resource";
 }
 
+fn buildPromptsListResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![]u8 {
+    var list: std.ArrayList(u8) = .empty;
+    defer list.deinit(allocator);
+
+    try list.appendSlice(allocator, "{\"jsonrpc\":\"2.0\"");
+
+    if (id) |id_val| {
+        try list.appendSlice(allocator, ",\"id\":");
+        switch (id_val) {
+            .integer => |i| {
+                var buf: [32]u8 = undefined;
+                const str = std.fmt.bufPrint(&buf, "{}", .{i}) catch unreachable;
+                try list.appendSlice(allocator, str);
+            },
+            .string => |s| {
+                try list.append(allocator, '"');
+                try list.appendSlice(allocator, s);
+                try list.append(allocator, '"');
+            },
+            else => try list.appendSlice(allocator, "null"),
+        }
+    }
+
+    try list.appendSlice(allocator, ",\"result\":{\"prompts\":[");
+
+    try list.appendSlice(allocator, "{\"name\":\"zig_arraylist\",\"description\":\"How to create and use ArrayList in Zig 0.16\"},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_hashmap\",\"description\":\"How to create and use HashMap in Zig 0.16\"},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_json\",\"description\":\"How to parse and stringify JSON in Zig 0.16\"},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_error_handling\",\"description\":\"How to handle errors in Zig 0.16\"},");
+    try list.appendSlice(allocator, "{\"name\":\"zig_io\",\"description\":\"I/O patterns for reading and writing in Zig 0.16\"}");
+
+    try list.appendSlice(allocator, "]}}");
+
+    return list.toOwnedSlice(allocator);
+}
+
+fn handlePromptsGet(allocator: std.mem.Allocator, id: ?std.json.Value, params: ?std.json.Value) ![]u8 {
+    var list: std.ArrayList(u8) = .empty;
+    defer list.deinit(allocator);
+
+    try list.appendSlice(allocator, "{\"jsonrpc\":\"2.0\"");
+
+    if (id) |id_val| {
+        try list.appendSlice(allocator, ",\"id\":");
+        switch (id_val) {
+            .integer => |i| {
+                var buf: [32]u8 = undefined;
+                const str = std.fmt.bufPrint(&buf, "{}", .{i}) catch unreachable;
+                try list.appendSlice(allocator, str);
+            },
+            .string => |s| {
+                try list.append(allocator, '"');
+                try list.appendSlice(allocator, s);
+                try list.append(allocator, '"');
+            },
+            else => try list.appendSlice(allocator, "null"),
+        }
+    }
+
+    var prompt_name: ?[]const u8 = null;
+    if (params) |p| {
+        if (p.object.get("name")) |n| {
+            prompt_name = n.string;
+        }
+    }
+
+    if (prompt_name) |name| {
+        const content = getPromptContent(name);
+        try list.appendSlice(allocator, ",\"result\":{\"description\":\"Zig 0.16 Pattern\",\"messages\":[{\"role\":\"user\",\"content\":{\"type\":\"text\",\"text\":\"");
+
+        for (content) |byte| {
+            switch (byte) {
+                '"' => try list.appendSlice(allocator, "\\\""),
+                '\\' => try list.appendSlice(allocator, "\\\\"),
+                '\n' => try list.appendSlice(allocator, "\\n"),
+                '\r' => try list.appendSlice(allocator, "\\r"),
+                '\t' => try list.appendSlice(allocator, "\\t"),
+                else => try list.append(allocator, byte),
+            }
+        }
+
+        try list.appendSlice(allocator, "\"}}]}");
+    } else {
+        try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"Missing prompt name\"}");
+    }
+
+    try list.appendSlice(allocator, "}");
+
+    return list.toOwnedSlice(allocator);
+}
+
+fn getPromptContent(name: []const u8) []const u8 {
+    if (std.mem.eql(u8, name, "zig_arraylist")) {
+        return 
+        \\You are working with Zig 0.16 ArrayList. Follow these patterns:
+        \\
+        \\1. Initialization:
+        \\   var list: std.ArrayList(T) = .empty;
+        \\
+        \\2. Adding items (requires allocator):
+        \\   try list.append(allocator, item);
+        \\
+        \\3. Accessing items:
+        \\   for (list.items) |item| { ... }
+        \\   const item = list.items[index];
+        \\
+        \\4. Cleanup (requires allocator):
+        \\   list.deinit(allocator);
+        \\
+        \\Important: Always pass allocator to append() and deinit()!
+        \\Use initCapacity(allocator, size) if you know the size upfront.
+        ;
+    } else if (std.mem.eql(u8, name, "zig_hashmap")) {
+        return 
+        \\You are working with Zig 0.16 HashMap. Follow these patterns:
+        \\
+        \\1. Initialization:
+        \\   var map: std.StringHashMap(V) = .empty;
+        \\
+        \\2. Inserting (requires allocator):
+        \\   try map.put(allocator, key, value);
+        \\
+        \\3. Getting values:
+        \\   if (map.get(key)) |value| { ... }
+        \\
+        \\4. Checking existence:
+        \\   if (map.contains(key)) { ... }
+        \\
+        \\5. Removing:
+        \\   _ = map.remove(key);
+        \\
+        \\6. Iteration:
+        \\   var iter = map.iterator();
+        \\   while (iter.next()) |entry| {
+        \\       const key = entry.key_ptr.*;
+        \\       const value = entry.value_ptr.*;
+        \\   }
+        \\
+        \\7. Cleanup (requires allocator):
+        \\   map.deinit(allocator);
+        \\
+        \\Important: Always pass allocator to put() and deinit()!
+        ;
+    } else if (std.mem.eql(u8, name, "zig_json")) {
+        return 
+        \\You are working with Zig 0.16 JSON. Follow these patterns:
+        \\
+        \\1. Define a struct matching your JSON structure:
+        \\   const Person = struct {
+        \\       name: []const u8,
+        \\       age: u32,
+        \\   };
+        \\
+        \\2. Parse JSON string to struct:
+        \\   var parsed = try std.json.parseFromSlice(Person, allocator, json_str, .{});
+        \\   defer parsed.deinit();
+        \\   const person = parsed.value;
+        \\
+        \\3. For dynamic/nested JSON, use std.json.Value:
+        \\   var parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_str, .{});
+        \\   defer parsed.deinit();
+        \\   const name = parsed.value.object.get("name").?.string;
+        \\
+        \\4. Stringify struct to JSON:
+        \\   const output = try std.json.stringifyAlloc(allocator, person, .{});
+        \\   defer allocator.free(output);
+        \\
+        \\Important: Always call parsed.deinit() and free allocated strings!
+        ;
+    } else if (std.mem.eql(u8, name, "zig_error_handling")) {
+        return 
+        \\You are handling errors in Zig 0.16. Follow these patterns:
+        \\
+        \\1. Try-catch pattern:
+        \\   const result = functionThatMayFail() catch |err| {
+        \\       std.log.err("Error: {}", .{err});
+        \\       return err;
+        \\   };
+        \\
+        \\2. If-else with error:
+        \\   if (functionThatMayFail()) |value| {
+        \\       // Success
+        \\   } else |err| {
+        \\       // Handle error
+        \\   }
+        \\
+        \\3. Optional unwrapping:
+        \\   if (optional_value) |value| {
+        \\       // value is not null
+        \\   } else {
+        \\       // value is null
+        \\   }
+        \\
+        \\4. Common errors with ArrayList/HashMap:
+        \\   - OutOfMemory: allocator failed
+        \\   - Missing allocator parameter: check if you passed allocator to method
+        \\   - Use-after-free: make sure not to use after deinit()
+        \\
+        \\5. Error return trace:
+        \\   Run with `zig build` to see full error trace
+        \\   Check stderr output for detailed messages
+        ;
+    } else if (std.mem.eql(u8, name, "zig_io")) {
+        return 
+        \\You are working with I/O in Zig 0.16. Follow these patterns:
+        \\
+        \\1. Main function signature:
+        \\   pub fn main(init: std.process.Init) !void {
+        \\       const io = init.io;
+        \\       const allocator = init.arena.allocator();
+        \\   }
+        \\
+        \\2. Reading from stdin:
+        \\   var stdin_buffer: [4096]u8 = undefined;
+        \\   var stdin_reader: Io.File.Reader = .init(Io.File.stdin(), io, &stdin_buffer);
+        \\   const reader = &stdin_reader.interface;
+        \\   const line = reader.takeDelimiterInclusive('\\n') catch break;
+        \\
+        \\3. Writing to stdout:
+        \\   var stdout_buffer: [4096]u8 = undefined;
+        \\   var stdout_writer: Io.File.Writer = .init(Io.File.stdout(), io, &stdout_buffer);
+        \\   const writer = &stdout_writer.interface;
+        \\   try writer.writeAll("Hello\\n");
+        \\   try writer.flush(); // Always flush!
+        \\
+        \\4. Writing to stderr (for logging):
+        \\   var stderr_buffer: [4096]u8 = undefined;
+        \\   var stderr_writer: Io.File.Writer = .init(Io.File.stderr(), io, &stderr_buffer);
+        \\   const stderr = &stderr_writer.interface;
+        \\   try stderr.print("Debug: {}\\n", .{value});
+        \\
+        \\Important: Always flush stdout after writing, especially in servers!
+        ;
+    }
+    return "Unknown prompt";
+}
+
 fn handleToolsCall(init: std.process.Init, allocator: std.mem.Allocator, id: ?std.json.Value, params: ?std.json.Value) ![]u8 {
     var list: std.ArrayList(u8) = .empty;
     defer list.deinit(allocator);
@@ -556,6 +810,590 @@ fn handleToolsCall(init: std.process.Init, allocator: std.mem.Allocator, id: ?st
     return list.toOwnedSlice(allocator);
 }
 
+fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![]u8 {
+    var list: std.ArrayList(u8) = .empty;
+    defer list.deinit(allocator);
+
+    if (std.mem.eql(u8, pattern, "list")) {
+        try list.appendSlice(allocator,
+            \\\n            \\Available Zig 0.16 Patterns:
+            \\========================
+            \\n            \\Use zig_patterns tool with pattern parameter:
+            \\
+            \\  - arraylist      : ArrayList usage patterns
+            \\  - hashmap        : HashMap usage patterns  
+            \\  - json           : JSON parsing/stringifying
+            \\  - io             : I/O patterns (stdin/stdout/stderr)
+            \\  - allocator      : Memory allocator patterns
+            \\  - error_handling : Error handling techniques
+            \\  - build_template : build.zig template
+            \\  - zon_template   : build.zig.zon template
+            \\  - guidelines     : Complete Zig 0.16 guidelines
+            \\  - list           : Show this list
+            \\n            \\Example: zig_patterns with pattern="arraylist"
+        );
+    } else if (std.mem.eql(u8, pattern, "arraylist")) {
+        try list.appendSlice(allocator,
+            \\\n            \\ArrayList Patterns in Zig 0.16
+            \\==============================
+            \\n            \\const std = @import("std");
+            \\n            \\pub fn main() !void {
+            \\    const allocator = std.heap.page_allocator;
+            \\    
+            \\    // ========================================
+            \\    // TWO WAYS TO INITIALIZE (both valid):
+            \\    // ========================================
+            \\    
+            \\    // WAY 1: .empty (simple, grows dynamically)
+            \\    var list: std.ArrayList(u32) = .empty;
+            \\    
+            \\    // WAY 2: initCapacity (pre-allocate, better performance)
+            \\    // var list = try std.ArrayList(u32).initCapacity(allocator, 100);
+            \\    
+            \\    // ========================================
+            \\    // ADDING ITEMS - ALWAYS pass allocator!
+            \\    // ========================================
+            \\    
+            \\    // Add single items
+            \\    try list.append(allocator, 10);
+            \\    try list.append(allocator, 20);
+            \\    
+            \\    // Add multiple items at once
+            \\    try list.appendSlice(allocator, &[_]u32{ 30, 40, 50 });
+            \\    
+            \\    // ========================================
+            \\    // ACCESSING ITEMS
+            \\    // ========================================
+            \\    const first = list.items[0];           // Direct index
+            \\    const len = list.items.len;             // Get length
+            \\    const last = list.getLast();            // Get last item
+            \\    
+            \\    // ========================================
+            \\    // ITERATING
+            \\    // ========================================
+            \\    for (list.items) |item| {
+            \\        std.debug.print("{d}\\n", .{item});
+            \\    }
+            \\    
+            \\    // With index
+            \\    for (list.items, 0..) |item, i| {
+            \\        std.debug.print("[{d}] = {d}\\n", .{ i, item });
+            \\    }
+            \\    
+            \\    // ========================================
+            \\    // REMOVING ITEMS
+            \\    // ========================================
+            \\    const removed = list.pop();             // Remove and return last
+            \\    list.clearRetainingCapacity();          // Clear but keep memory
+            \\    list.clearAndFree(allocator);           // Clear and free memory
+            \\    
+            \\    // ========================================
+            \\    // CLEANUP - ALWAYS pass allocator!
+            \\    // ========================================
+            \\    list.deinit(allocator);
+            \\}
+            \\n            \\When to use each initialization:
+            \\----------------------------------
+            \\Use .empty when:
+            \\  - You don't know the final size
+            \\  - The list will be small
+            \\  - Simplicity is preferred
+            \\
+            \\Use initCapacity(allocator, size) when:
+            \\  - You know the approximate size
+            \\  - Performance is critical
+            \\  - Avoiding reallocations matters
+            \\  Example: Reading a file with known line count
+            \\  var lines = try std.ArrayList([]const u8).initCapacity(allocator, line_count);
+            \\n            \\Key Points:
+            \\-----------
+            \\1. Both .empty and initCapacity() work - choose based on needs
+            \\2. append(allocator, item) - Add single item
+            \\3. appendSlice(allocator, slice) - Add multiple items at once
+            \\4. deinit(allocator) - Cleanup (always required!)
+            \\5. Access items via list.items array
+        );
+    } else if (std.mem.eql(u8, pattern, "hashmap")) {
+        try list.appendSlice(allocator,
+            \\\n            \\HashMap Patterns in Zig 0.16
+            \\=============================
+            \\n            \\const std = @import("std");
+            \\n            \\pub fn main() !void {
+            \\    const allocator = std.heap.page_allocator;
+            \\    
+            \\    // Initialize with .empty
+            \\    var map: std.StringHashMap(u32) = .empty;
+            \\    
+            \\    // Insert items - ALWAYS pass allocator!
+            \\    try map.put(allocator, "answer", 42);
+            \\    try map.put(allocator, "count", 100);
+            \\    
+            \\    // Get values
+            \\    if (map.get("answer")) |value| {
+            \\        std.debug.print("Answer: {}\\n", .{value});
+            \\    }
+            \\    
+            \\    // Check existence
+            \\    if (map.contains("answer")) {
+            \\        std.debug.print("Key exists!\\n", .{});
+            \\    }
+            \\    
+            \\    // Get with default
+            \\    const value = map.get("missing") orelse 0;
+            \\    
+            \\    // Remove
+            \\    const removed = map.remove("answer");
+            \\    
+            \\    // Iteration
+            \\    var iter = map.iterator();
+            \\    while (iter.next()) |entry| {
+            \\        const key = entry.key_ptr.*;
+            \\        const val = entry.value_ptr.*;
+            \\        std.debug.print("{s} = {}\\n", .{ key, val });
+            \\    }
+            \\    
+            \\    // Count
+            \\    const count = map.count();
+            \\    
+            \\    // Clear
+            \\    map.clearRetainingCapacity();
+            \\    map.clearAndFree(allocator);
+            \\    
+            \\    // Cleanup - ALWAYS pass allocator!
+            \\    map.deinit(allocator);
+            \\}
+            \\n            \\Key Points:
+            \\-----------
+            \\1. Initialize with .empty
+            \\2. put(allocator, key, value) - requires allocator parameter
+            \\3. get(key) returns ?V (optional)
+            \\4. contains(key) returns bool
+            \\5. remove(key) returns ?V (removed value)
+            \\6. Use iterator() to traverse all entries
+            \\7. deinit(allocator) - requires allocator parameter
+        );
+    } else if (std.mem.eql(u8, pattern, "json")) {
+        try list.appendSlice(allocator,
+            \\\n            \\JSON Patterns in Zig 0.16
+            \\==========================
+            \\n            \\const std = @import("std");
+            \\n            \\const Person = struct {
+            \\    name: []const u8,
+            \\    age: u32,
+            \\};
+            \\n            \\pub fn main() !void {
+            \\    const allocator = std.heap.page_allocator;
+            \\    
+            \\    // ========================================
+            \\    // Parsing JSON to Struct
+            \\    // ========================================
+            \\    const json_str = \\\"{\\\"name\\\":\\\"Alice\\\",\\\"age\\\":30}\\\";
+            \\    
+            \\    var parsed = try std.json.parseFromSlice(Person, allocator, json_str, .{});
+            \\    defer parsed.deinit();  // ALWAYS deinit!
+            \\    
+            \\    const person = parsed.value;
+            \\    std.debug.print("Name: {s}, Age: {}\\n", .{ person.name, person.age });
+            \\    
+            \\    // ========================================
+            \\    // Parsing Dynamic JSON (nested objects)
+            \\    // ========================================
+            \\    const complex_json = \\\"{\\\"users\\\":[{\\\"name\\\":\\\"Bob\\\"}],\\\"count\\\":1}\\\";
+            \\    
+            \\    var dynamic = try std.json.parseFromSlice(std.json.Value, allocator, complex_json, .{});
+            \\    defer dynamic.deinit();
+            \\    
+            \\    // Access nested data
+            \\    const users = dynamic.value.object.get("users").?.array;
+            \\    const count = dynamic.value.object.get("count").?.integer;
+            \\    const first_user = users.items[0].object.get("name").?.string;
+            \\    
+            \\    // ========================================
+            \\    // Stringify Struct to JSON
+            \\    // ========================================
+            \\    const new_person = Person{ .name = "Charlie", .age = 25 };
+            \\    
+            \\    const json_output = try std.json.stringifyAlloc(allocator, new_person, .{});
+            \\    defer allocator.free(json_output);  // ALWAYS free!
+            \\    
+            \\    std.debug.print("JSON: {s}\\n", .{json_output});
+            \\    
+            \\    // With formatting
+            \\    const pretty_json = try std.json.stringifyAlloc(allocator, new_person, .{ .whitespace = .indent_2 });
+            \\    defer allocator.free(pretty_json);
+            \\}
+            \\n            \\Key Points:
+            \\-----------
+            \\1. Define struct matching your JSON structure
+            \\2. parseFromSlice(Type, allocator, json_str, .{}) - parse to struct
+            \\3. parseFromSlice(std.json.Value, ...) - parse to dynamic value
+            \\4. ALWAYS call parsed.deinit() to free memory
+            \\5. stringifyAlloc(allocator, value, .{}) - convert to JSON string
+            \\6. ALWAYS free the returned string with allocator.free()
+            \\7. Use .whitespace option for pretty printing
+        );
+    } else if (std.mem.eql(u8, pattern, "io")) {
+        try list.appendSlice(allocator,
+            \\\n            \\I/O Patterns in Zig 0.16
+            \\========================
+            \\n            \\const std = @import("std");
+            \\const Io = std.Io;
+            \\n            \\pub fn main(init: std.process.Init) !void {
+            \\    const io = init.io;
+            \\    const allocator = init.arena.allocator();
+            \\    
+            \\    // ========================================
+            \\    // Reading from stdin
+            \\    // ========================================
+            \\    var stdin_buffer: [4096]u8 = undefined;
+            \\    var stdin_reader: Io.File.Reader = .init(Io.File.stdin(), io, &stdin_buffer);
+            \\    const reader = &stdin_reader.interface;
+            \\    
+            \\    // Read until newline
+            \\    const line = reader.takeDelimiterInclusive('\\n') catch |err| {
+            \\        if (err == error.EndOfStream) return;
+            \\        return err;
+            \\    };
+            \\    std.debug.print("Read: {s}\\n", .{line});
+            \\    
+            \\    // Read exact number of bytes
+            \\    var buf: [100]u8 = undefined;
+            \\    const bytes_read = try reader.readAll(&buf);
+            \\    
+            \\    // ========================================
+            \\    // Writing to stdout
+            \\    // ========================================
+            \\    var stdout_buffer: [4096]u8 = undefined;
+            \\    var stdout_writer: Io.File.Writer = .init(Io.File.stdout(), io, &stdout_buffer);
+            \\    const writer = &stdout_writer.interface;
+            \\    
+            \\    try writer.writeAll("Hello, world!\\n");
+            \\    try writer.print("Number: {}\\n", .{42});
+            \\    try writer.flush();  // IMPORTANT: Always flush!
+            \\    
+            \\    // ========================================
+            \\    // Writing to stderr (for logging)
+            \\    // ========================================
+            \\    var stderr_buffer: [4096]u8 = undefined;
+            \\    var stderr_writer: Io.File.Writer = .init(Io.File.stderr(), io, &stderr_buffer);
+            \\    const stderr = &stderr_writer.interface;
+            \\    
+            \\    try stderr.print("[DEBUG] Value: {}\\n", .{42});
+            \\    try stderr.flush();
+            \\    
+            \\    // ========================================
+            \\    // File operations
+            \\    // ========================================
+            \\    // Read entire file
+            \\    const file_content = try std.fs.cwd().readFileAlloc(allocator, "input.txt", 1024 * 1024);
+            \\    defer allocator.free(file_content);
+            \\    
+            \\    // Write to file
+            \\    const file = try std.fs.cwd().createFile("output.txt", .{});
+            \\    defer file.close();
+            \\    try file.writeAll("Hello, file!");
+            \\}
+            \\n            \\Key Points:
+            \\-----------
+            \\1. Main signature: pub fn main(init: std.process.Init) !void
+            \\2. Get io from init.io
+            \\3. Create Reader/Writer with buffer and io
+            \\4. Always flush after writing to stdout
+            \\5. Use stderr for logging (doesn't interfere with output)
+            \\6. Use reader.takeDelimiterInclusive() for line-based input
+            \\7. File operations use std.fs.cwd()
+        );
+    } else if (std.mem.eql(u8, pattern, "allocator")) {
+        try list.appendSlice(allocator,
+            \\\n            \\Allocator Patterns in Zig 0.16
+            \\==============================
+            \\n            \\const std = @import("std");
+            \\n            \\pub fn main(init: std.process.Init) !void {
+            \\    // ========================================
+            \\    // Arena allocator (recommended for main)
+            \\    // ========================================
+            \\    const allocator = init.arena.allocator();
+            \\    
+            \\    // Allocate memory
+            \\    const buf = try allocator.alloc(u8, 100);
+            \\    defer allocator.free(buf);
+            \\    
+            \\    // Reallocate
+            \\    const bigger_buf = try allocator.realloc(buf, 200);
+            \\    defer allocator.free(bigger_buf);
+            \\    
+            \\    // ========================================
+            \\    // Other allocators
+            \\    // ========================================
+            \\    
+            \\    // Page allocator (simplest, slow)
+            \\    const page_alloc = std.heap.page_allocator;
+            \\    
+            \\    // General purpose allocator (debugging features)
+            \\    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+            \\    const gpa_alloc = gpa.allocator();
+            \\    defer _ = gpa.deinit();
+            \\    
+            \\    // Fixed buffer allocator (no heap, stack only)
+            \\    var buffer: [1024]u8 = undefined;
+            \\    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            \\    const fba_alloc = fba.allocator();
+            \\}
+            \\n            \\// ========================================
+            \\// Using allocators with data structures
+            \\// ========================================
+            \\fn exampleWithDataStructures(allocator: std.mem.Allocator) !void {
+            \\    // ArrayList
+            \\    var list: std.ArrayList(u32) = .empty;
+            \\    try list.append(allocator, 10);  // Pass allocator!
+            \\    list.deinit(allocator);           // Pass allocator!
+            \\    
+            \\    // HashMap
+            \\    var map: std.StringHashMap(u32) = .empty;
+            \\    try map.put(allocator, "key", 42);  // Pass allocator!
+            \\    map.deinit(allocator);               // Pass allocator!
+            \\    
+            \\    // String
+            \\    var str = try std.ArrayList(u8).initCapacity(allocator, 100);
+            \\    try str.appendSlice(allocator, "Hello");
+            \\    const final_str = try str.toOwnedSlice(allocator);
+            \\    defer allocator.free(final_str);
+            \\}
+            \\n            \\Key Points:
+            \\-----------
+            \\1. Pass allocator to ALL data structure methods that allocate
+            \\2. Always free memory with allocator.free() or deinit(allocator)
+            \\3. Use defer to ensure cleanup happens
+            \\4. init.arena.allocator() is best for main() functions
+            \\5. GeneralPurposeAllocator helps detect memory leaks
+            \\6. Page allocator is simplest but slower
+        );
+    } else if (std.mem.eql(u8, pattern, "error_handling")) {
+        try list.appendSlice(allocator,
+            \\\n            \\Error Handling in Zig 0.16
+            \\=========================
+            \\n            \\const std = @import("std");
+            \\n            \\fn mayFail() !u32 {
+            \\    return error.SomeError;
+            \\}
+            \\n            \\fn returnsOptional() ?u32 {
+            \\    return null;
+            \\}
+            \\n            \\pub fn main() !void {
+            \\    // ========================================
+            \\    // Try-catch with catch
+            \\    // ========================================
+            \\    const result = mayFail() catch |err| {
+            \\        std.log.err("Error occurred: {}", .{err});
+            \\        return err;  // Re-throw
+            \\    };
+            \\    
+            \\    // Catch with default value
+            \\    const value = mayFail() catch 42;
+            \\    
+            \\    // ========================================
+            \\    // If-else with error
+            \\    // ========================================
+            \\    if (mayFail()) |val| {
+            \\        std.debug.print("Success: {}\\n", .{val});
+            \\    } else |err| {
+            \\        std.debug.print("Failed: {}\\n", .{err});
+            \\    }
+            \\    
+            \\    // ========================================
+            \\    // while with error
+            \\    // ========================================
+            \\    // while (condition) |val| {
+            \\    //     // use val
+            \\    // } else |err| {
+            \\    //     // handle error
+            \\    }
+            \\    
+            \\    // ========================================
+            \\    // Optional unwrapping
+            \\    // ========================================
+            \\    if (returnsOptional()) |val| {
+            \\        std.debug.print("Value: {}\\n", .{val});
+            \\    } else {
+            \\        std.debug.print("Value is null\\n", .{});
+            \\    }
+            \\    
+            \\    // Orelse for default
+            \\    const opt_val = returnsOptional() orelse 0;
+            \\    
+            \\    // Orelse with block
+            \\    const block_val = returnsOptional() orelse blk: {
+            \\        std.debug.print("Computing default...\\n", .{});
+            \\        break :blk 42;
+            \\    };
+            \\    
+            \\    // ========================================
+            \\    // try shorthand
+            \\    // ========================================
+            \\    const tried = try mayFail();  // Returns error or unwraps
+            \\    
+            \\    // try with catch
+            \\    const caught = try mayFail() catch |err| {
+            \\        std.log.err("Caught: {}", .{err});
+            \\        return err;
+            \\    };
+            \\}
+            \\n            \\Key Points:
+            \\-----------
+            \\1. catch |err| - catch errors and handle them
+            \\2. catch default - use default value on error
+            \\3. if-else |err| - handle success and error cases
+            \\4. orelse - unwrap optional or use default
+            \\5. try - shorthand for error propagation
+            \\6. defer - cleanup regardless of error
+            \\7. errdefer - cleanup only on error
+        );
+    } else if (std.mem.eql(u8, pattern, "build_template")) {
+        try list.appendSlice(allocator,
+            \\\n            \\build.zig Template
+            \\==================
+            \\n            \\const std = @import("std");
+            \\n            \\pub fn build(b: *std.Build) void {
+            \\    // Standard target and optimization options
+            \\    const target = b.standardTargetOptions(.{});
+            \\    const optimize = b.standardOptimizeOption(.{});
+            \\    
+            \\    // ========================================
+            \\    // Create executable
+            \\    // ========================================
+            \\    const exe = b.addExecutable(.{
+            \\        .name = "my-app",
+            \\        .root_module = b.createModule(.{
+            \\            .root_source_file = b.path("src/main.zig"),
+            \\            .target = target,
+            \\            .optimize = optimize,
+            \\        }),
+            \\    });
+            \\    
+            \\    // Install the executable
+            \\    b.installArtifact(exe);
+            \\    
+            \\    // ========================================
+            \\    // Run command
+            \\    // ========================================
+            \\    const run_step = b.step("run", "Run the app");
+            \\    const run_cmd = b.addRunArtifact(exe);
+            \\    run_step.dependOn(&run_cmd.step);
+            \\    
+            \\    // Pass arguments to run
+            \\    if (b.args) |args| {
+            \\        run_cmd.addArgs(args);
+            \\    }
+            \\    
+            \\    // ========================================
+            \\    // Tests
+            \\    // ========================================
+            \\    const exe_unit_tests = b.addTest(.{
+            \\        .root_module = exe.root_module,
+            \\    });
+            \\    
+            \\    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+            \\    const test_step = b.step("test", "Run unit tests");
+            \\    test_step.dependOn(&run_exe_unit_tests.step);
+            \\}
+        );
+    } else if (std.mem.eql(u8, pattern, "zon_template")) {
+        try list.appendSlice(allocator,
+            \\\n            \\build.zig.zon Template
+            \\=======================
+            \\n            \\.{
+            \\    .name = "my-project",
+            \\    .version = "0.1.0",
+            \\    .minimum_zig_version = "0.16.0",
+            \\    
+            \\    // Dependencies
+            \\    .dependencies = .{
+            \\        // Example dependency:
+            \\        // .clap = .{
+            \\        //     .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.10.0.tar.gz",
+            \\        //     .hash = "1220...",
+            \\        // },
+            \\    },
+            \\    
+            \\    // Paths included in package
+            \\    .paths = .{
+            \\        "build.zig",
+            \\        "build.zig.zon",
+            \\        "src",
+            \\        "LICENSE",
+            \\        "README.md",
+            \\    },
+            \\}
+        );
+    } else if (std.mem.eql(u8, pattern, "guidelines")) {
+        try list.appendSlice(allocator,
+            \\\n            \\Zig 0.16 Guidelines
+            \\====================
+            \\n            \\## Core Principles
+            \\---------------
+            \\1. Explicit is better than implicit
+            \\2. No hidden allocations - allocator always explicit
+            \\3. No hidden control flow - errors are explicit
+            \\4. Compile-time computation when possible
+            \\5. Simplicity over features
+            \\n            \\## ArrayList
+            \\-----------
+            \\var list: std.ArrayList(u32) = .empty;
+            \\try list.append(allocator, item);  // COM allocator!
+            \\list.deinit(allocator);            // COM allocator!
+            \\for (list.items) |item| { ... }
+            \\ 
+            \\## HashMap
+            \\---------
+            \\var map: std.StringHashMap(u32) = .empty;
+            \\try map.put(allocator, key, value);  // COM allocator!
+            \\map.deinit(allocator);               // COM allocator!
+            \\if (map.get(key)) |value| { ... }
+            \\ 
+            \\## Arena Allocator (main)
+            \\-------------------------
+            \\pub fn main(init: std.process.Init) !void {
+            \\    const allocator = init.arena.allocator();
+            \\}
+            \\ 
+            \\## Error Handling
+            \\---------------
+            \\✓ try function() - propagate error
+            \\  function() catch |err| handle(err) - catch and handle
+            \\  if (function()) |val| { } else |err| { } - if-else
+            \\  value orelse default - optional fallback
+            \\ 
+            \\## I/O
+            \\-----
+            \\const io = init.io;
+            \\var writer: Io.File.Writer = .init(Io.File.stdout(), io, &buffer);
+            \\try writer.flush();  // Always flush!
+            \\ 
+            \\## Memory Safety
+            \\-------------
+            \\- No use after free
+            \\- Use defer for cleanup
+            \\- Check bounds
+            \\- Explicit allocator passing
+            \\ 
+            \\## Build System
+            \\-------------
+            \\- b.path("src/main.zig") - use b.path()
+            \\- b.installArtifact(exe) - install executable
+            \\- b.step("run", "Run") - custom steps
+            \\ 
+            \\## Reference
+            \\---------
+            \\- Standard library: /home/seven/zig/lib/std/
+            \\- Language reference: ziglang.org/documentation/master/
+        );
+    } else {
+        try list.appendSlice(allocator, "Unknown pattern. Use 'list' to see available patterns.");
+    }
+
+    return list.toOwnedSlice(allocator);
+}
+
 fn executeTool(init: std.process.Init, allocator: std.mem.Allocator, name: []const u8, args: ?std.json.Value) ![]u8 {
     if (std.mem.eql(u8, name, "zig_version")) {
         return try runCommand(init, allocator, &.{ "zig", "version" });
@@ -568,6 +1406,10 @@ fn executeTool(init: std.process.Init, allocator: std.mem.Allocator, name: []con
             return try concatStrings(allocator, &.{"Error: No file provided"});
         }
         return try runCommand(init, allocator, &.{ "zig", "run", file_str });
+    } else if (std.mem.eql(u8, name, "zig_patterns")) {
+        const pattern = if (args) |a| a.object.get("pattern") else null;
+        const pattern_str = if (pattern) |p| p.string else "list";
+        return try getPatternDocumentation(allocator, pattern_str);
     } else {
         return try concatStrings(allocator, &.{ "Unknown tool: ", name });
     }
