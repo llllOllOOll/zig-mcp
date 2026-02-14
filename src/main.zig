@@ -1,6 +1,15 @@
 const std = @import("std");
 const Io = std.Io;
 
+// Server state tracking for better protocol compliance
+const ServerState = enum {
+    uninitialized,
+    initializing,
+    ready,
+};
+
+var server_state: ServerState = .uninitialized;
+
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     const io = init.io;
@@ -17,19 +26,35 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(Io.File.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
 
+    try stderr_writer.writeAll("[bruce] MCP Server starting (Zig 0.16 compatible)\n");
+    try stderr_writer.flush();
+
     while (true) {
         const line = stdin_reader.takeDelimiterInclusive('\n') catch |err| {
-            if (err == error.EndOfStream) break;
-            try stderr_writer.print("Error reading line: {}\n", .{err});
+            if (err == error.EndOfStream) {
+                try stderr_writer.writeAll("[bruce] End of stream, shutting down\n");
+                try stderr_writer.flush();
+                break;
+            }
+            try stderr_writer.print("[bruce] Error reading line: {}\n", .{err});
+            try stderr_writer.flush();
             break;
         };
 
         if (line.len == 0) continue;
 
-        try stderr_writer.print("Received: {s}\n", .{line});
+        try stderr_writer.print("[bruce] Received: {s}\n", .{line});
+        try stderr_writer.flush();
 
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{}) catch |err| {
-            try stderr_writer.print("Error parsing JSON: {}\n", .{err});
+            try stderr_writer.print("[bruce] Error parsing JSON: {}\n", .{err});
+            try stderr_writer.flush();
+            // Send parse error response
+            const error_response = try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{{\"code\":-32700,\"message\":\"Parse error\"}}}}", .{});
+            defer allocator.free(error_response);
+            try stdout_writer.writeAll(error_response);
+            try stdout_writer.writeAll("\n");
+            try stdout_writer.flush();
             continue;
         };
         defer parsed.deinit();
@@ -39,14 +64,24 @@ pub fn main(init: std.process.Init) !void {
         const method = if (value.object.get("method")) |m| m.string else continue;
         const id = value.object.get("id");
 
+        // Check if it's a notification (no id)
+        const is_notification = id == null;
+
+        try stderr_writer.print("[bruce] Method: {s}, Is notification: {}\n", .{ method, is_notification });
+        try stderr_writer.flush();
+
         if (std.mem.eql(u8, method, "initialize")) {
+            server_state = .initializing;
             const response = try buildInitializeResponse(allocator, id);
             defer allocator.free(response);
 
-            try stderr_writer.print("Sending: {s}\n", .{response});
+            try stderr_writer.print("[bruce] Sending initialize response: {s}\n", .{response});
+            try stderr_writer.flush();
             try stdout_writer.writeAll(response);
             try stdout_writer.writeAll("\n");
             try stdout_writer.flush();
+            try stderr_writer.writeAll("[bruce] Initialize response sent and flushed\n");
+            try stderr_writer.flush();
         } else if (std.mem.eql(u8, method, "tools/list")) {
             const response = try buildToolsListResponse(allocator, id);
             defer allocator.free(response);
@@ -95,9 +130,24 @@ pub fn main(init: std.process.Init) !void {
             try stdout_writer.writeAll(response);
             try stdout_writer.writeAll("\n");
             try stdout_writer.flush();
-        } else if (std.mem.eql(u8, method, "initialized")) {
-            // Notification, no response needed
+        } else if (std.mem.eql(u8, method, "initialized") or std.mem.eql(u8, method, "notifications/initialized")) {
+            // Client confirms initialization - now we can mark as ready
+            server_state = .ready;
+            try stderr_writer.writeAll("[bruce] Server initialized and ready\n");
+            try stderr_writer.flush();
+            // Notifications don't need responses
         } else {
+            // Check if server is initialized (except for initialize request)
+            if (server_state != .ready and !std.mem.eql(u8, method, "initialize")) {
+                try stderr_writer.print("[bruce] Server not initialized, rejecting method: {s}\n", .{method});
+                try stderr_writer.flush();
+                const error_response = try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{{\"code\":-32002,\"message\":\"Server not initialized\"}}}}", .{});
+                defer allocator.free(error_response);
+                try stdout_writer.writeAll(error_response);
+                try stdout_writer.writeAll("\n");
+                try stdout_writer.flush();
+                continue;
+            }
             try stderr_writer.print("Unknown method: {s}\n", .{method});
         }
     }
@@ -126,7 +176,7 @@ fn buildInitializeResponse(allocator: std.mem.Allocator, id: ?std.json.Value) ![
         }
     }
 
-    try list.appendSlice(allocator, ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"resources\":{},\"prompts\":{}},\"serverInfo\":{\"name\":\"bruce\",\"version\":\"0.1.0\"}}}");
+    try list.appendSlice(allocator, ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"resources\":{\"listChanged\":true,\"subscribe\":false},\"prompts\":{\"listChanged\":true},\"tools\":{\"listChanged\":true}},\"serverInfo\":{\"name\":\"bruce\",\"version\":\"0.2.0\"},\"instructions\":\"Zig 0.16 MCP Server with tools (zig_version, zig_build, zig_run, zig_patterns, zig_help), resources (zig://patterns/*, zig://templates/*), and prompts (zig_*). Use zig_patterns for documentation.\"}}");
 
     return list.toOwnedSlice(allocator);
 }
