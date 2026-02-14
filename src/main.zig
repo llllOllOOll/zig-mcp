@@ -247,158 +247,102 @@ fn handleResourcesRead(allocator: std.mem.Allocator, id: ?std.json.Value, params
 fn getResourceContent(uri: []const u8) []const u8 {
     if (std.mem.eql(u8, uri, "zig://guidelines/0.16")) {
         return 
-        \\# Zig 0.16 Guidelines - Breaking Changes and Best Practices
+        \\# Zig 0.16 Guidelines
         \\
-        \\## Key Breaking Changes from 0.14.x
+        \\## ArrayList
+        \\```zig
+        \\var list: std.ArrayList(u32) = .empty;
+        \\try list.append(allocator, item); // COM allocator!
+        \\list.deinit(allocator); // COM allocator!
+        \\```
         \\
-        \\### 1. std.io -> std.Io
-        \\- Old: `std.io.Writer`, `std.io.Reader`
-        \\- New: `std.Io.Writer`, `std.Io.Reader` (vtable-based interfaces)
-        \\- Key difference: Requires explicit buffering and Io instance
+        \\## StringHashMap
+        \\```zig
+        \\var map: std.StringHashMap(u32) = .empty;
+        \\try map.put(allocator, key, value); // COM allocator!
+        \\map.deinit(allocator); // COM allocator!
+        \\```
         \\
-        \\### 2. ArrayList/HashMap - Stateless Allocator
-        \\- OLD (0.14): `list.append(allocator, item)` - no, wait - it was `list.append(item)` in 0.14
-        \\- NEW (0.16): Methods store allocator internally
-        \\- Usage: `list.append(item)` - NO allocator parameter in method calls!
-        \\- Init: `var list: std.ArrayList(u8) = .empty;`
-        \\- But for parsing: `std.json.parseFromSlice(std.json.Value, allocator, ...)`
-        \\
-        \\### 3. Child Process
-        \\- Old: `std.process.Child.exec()` - removed
-        \\- New: `std.process.spawn(io, .{ .argv = &.{...}, .stdout = .pipe })`
-        \\- Requires `io` parameter from `init.io`
-        \\
-        \\### 4. File I/O
-        \\- Old: `std.io.getStdIn()`, `getStdOut()`, `getStdErr()`
-        \\- New: `Io.File.stdin()`, `Io.File.stdout()`, `Io.File.stderr()`
-        \\- Reader/Writer require buffer and Io instance
-        \\
-        \\### 5. Error Handling
-        \\- Method calls on optionals require careful handling
-        \\- Always use null-safe patterns
-        \\
-        \\## Correct Patterns
-        \\
-        \\### Arena Allocator (preferred for short-lived programs)
+        \\## Arena Allocator (main)
         \\```zig
         \\pub fn main(init: std.process.Init) !void {
         \\    const allocator = init.arena.allocator();
-        \\    // Use allocator for all allocations
         \\}
         \\```
         \\
-        \\### ArrayList
-        \\```zig
-        \\var list: std.ArrayList(u8) = .empty;
-        \\defer list.deinit(allocator);
-        \\try list.append(allocator, byte);
-        \\// NOT list.append(allocator, byte) - allocator already stored
-        \\```
-        \\
-        \\### HashMap
-        \\```zig
-        \\var map: std.StringHashMap(u32) = .empty;
-        \\defer map.deinit(allocator);
-        \\try map.put(allocator, key, value);
-        \\// Wait - check actual 0.16 API
-        \\```
-        \\
-        \\### I/O
-        \\```zig
-        \\const io = init.io;
-        \\var buffer: [4096]u8 = undefined;
-        \\var reader = Io.File.stdin().reader(io, &buffer);
-        \\// Use reader.interface methods
-        \\```
-        \\
-        \\## Always Remember
-        \\1. Pass `allocator` to init methods, NOT to method calls on collections
-        \\2. Use `init.arena.allocator()` for simple programs
-        \\3. Use `init.io` for all I/O operations
-        \\4. Remember to flush writers!
+        \\## Fonte da verdade: stdlib em /home/seven/zig/lib/std/array_list.zig
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/arraylist")) {
         return 
-        \\// ArrayList Patterns in Zig 0.16
+        \\// ArrayList Patterns em Zig 0.16
         \\
-        \\// CORRECT: Initialize empty (no allocator yet)
-        \\var list: std.ArrayList(u8) = .empty;
+        \\const std = @import("std");
         \\
-        \\// Use the allocator for operations that require it
-        \\// (not for append - that's stored internally now!)
-        \\
-        \\// WRONG: This doesn't compile in 0.16
-        \\// try list.append(allocator, item);
-        \\
-        \\// CORRECT: append takes item directly
-        \\try list.append(allocator, 'h');
-        \\try list.append(allocator, 'e');
-        \\try list.append(allocator, 'l');
-        \\try list.append(allocator, 'l');
-        \\try list.append(allocator, 'o');
-        \\
-        \\// But deinit requires allocator!
-        \\defer list.deinit(allocator);
-        \\
-        \\// For parsing JSON, still need allocator
-        \\const parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{});
-        \\
-        \\// Converting to slice needs allocator
-        \\const result = try list.toOwnedSlice(allocator);
-        \\defer allocator.free(result);
-        \\
-        \\// With arena allocator (recommended for main)
-        \\pub fn main(init: std.process.Init) !void {
-        \\    const allocator = init.arena.allocator();
+        \\pub fn main() !void {
+        \\    const allocator = std.heap.page_allocator;
         \\    
+        \\    // Inicializa vazio
         \\    var list: std.ArrayList(u32) = .empty;
-        \\    defer list.deinit(allocator);
         \\    
-        \\    try list.append(allocator, 42);
-        \\    try list.append(allocator, 100);
+        \\    // append(allocator, item) - COM allocator!
+        \\    try list.append(allocator, 10);
+        \\    try list.append(allocator, 20);
+        \\    try list.append(allocator, 30);
         \\    
         \\    for (list.items) |item| {
-        \\        std.debug.print("{}\n", .{item});
+        \\        std.debug.print("{d}\n", .{item});
         \\    }
+        \\    
+        \\    _ = list.pop();
+        \\    
+        \\    // deinit(allocator) - COM allocator!
+        \\    list.deinit(allocator);
         \\}
+        \\
+        \\// Métodos principais:
+        \\// - init(allocator) ou .empty - inicializa
+        \\// - append(allocator, item) - COM allocator!
+        \\// - appendSlice(allocator, items) - COM allocator!
+        \\// - pop() - remove último
+        \\// - deinit(allocator) - COM allocator!
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/hashmap")) {
         return 
-        \\// HashMap Patterns in Zig 0.16
+        \\// HashMap Patterns em Zig 0.16
         \\
-        \\// StringHashMap - most common choice
-        \\var map: std.StringHashMap(u32) = .empty;
-        \\defer map.deinit(allocator);
+        \\const std = @import("std");
         \\
-        \\// Put with allocator
-        \\try map.put(allocator, "answer", 42);
-        \\try map.put(allocator, "count", 100);
-        \\
-        \\// Get
-        \\if (map.get("answer")) |value| {
-        \\    std.debug.print("Answer: {}\n", .{value});
+        \\pub fn main() !void {
+        \\    const allocator = std.heap.page_allocator;
+        \\    
+        \\    var map: std.StringHashMap(u32) = .empty;
+        \\    
+        \\    // put(allocator, key, value) - COM allocator!
+        \\    try map.put(allocator, "answer", 42);
+        \\    try map.put(allocator, "count", 100);
+        \\    
+        \\    // Get
+        \\    if (map.get("answer")) |value| {
+        \\        std.debug.print("Answer: {}\n", .{value});
+        \\    }
+        \\    
+        \\    // Delete
+        \\    _ = map.remove("key");
+        \\    
+        \\    // deinit(allocator) - COM allocator!
+        \\    map.deinit(allocator);
         \\}
         \\
-        \\// Check existence
-        \\if (map.contains("missing")) {}
-        \\
-        \\// Delete
-        \\_ = map.remove("key");
-        \\
-        \\// Iteration
-        \\var iterator = map.iterator();
-        \\while (iterator.next()) |entry| {
-        \\    std.debug.print("{s} = {}\n", .{entry.key_ptr.*, entry.value_ptr.*});
-        \\}
-        \\
-        \\// AutoHashMap - when you need integer keys
-        \\var auto_map: std.AutoHashMap(u32, []const u8) = .empty;
-        \\defer auto_map.deinit(allocator);
-        \\
-        \\try auto_map.put(allocator, 1, "one");
-        \\try auto_map.put(allocator, 2, "two");
+        \\// StringHashMap:
+        \\// - .empty - inicializa
+        \\// - put(allocator, key, value) - COM allocator!
+        \\// - get(key) - retorna ?V
+        \\// - contains(key) - bool
+        \\// - remove(key) - ?V
+        \\// - iterator() - percorre
+        \\// - deinit(allocator) - COM allocator!
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/io")) {
@@ -442,40 +386,27 @@ fn getResourceContent(uri: []const u8) []const u8 {
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/allocator")) {
         return 
-        \\// Allocator Patterns in Zig 0.16
+        \\// Allocator Patterns em Zig 0.16
         \\
-        \\## When Allocator is Stored vs Passed
-        \\
-        \\### Arena Allocator (RECOMMENDED for main)
+        \\## Arena Allocator (main)
         \\pub fn main(init: std.process.Init) !void {
-        \\    // Arena allocator - automatically cleans up at end
         \\    const allocator = init.arena.allocator();
-        \\    
-        \\    // No need to free individual allocations
-        \\    const slice = try allocator.alloc(u8, 100);
-        \\    // But you can if you want
-        \\    allocator.free(slice);
         \\}
         \\
-        \\### General Purpose Allocator (GPA)
-        \\// NOT recommended for simple programs - requires manual cleanup
-        \\const gpa = std.heap.general_purpose_allocator(.{});
-        \\defer gpa.deinit();
-        \\const allocator = gpa.allocator();
+        \\## ArrayList - .empty + allocator em tudo!
+        \\var list: std.ArrayList(u32) = .empty;
+        \\try list.append(allocator, item);
+        \\list.deinit(allocator);
         \\
-        \\### ArrayList/HashMap - Allocator is Stored!
-        \\var list: std.ArrayList(u8) = .empty;
-        \\defer list.deinit(allocator); // Must provide allocator to deinit
-        \\try list.append(allocator, item); // But append doesn't take allocator
+        \\## StringHashMap - .empty + allocator em tudo!
+        \\var map: std.StringHashMap(u32) = .empty;
+        \\try map.put(allocator, key, value);
+        \\map.deinit(allocator);
         \\
-        \\### String format with allocator
-        \\const formatted = try std.fmt.allocPrint(allocator, "Value: {}", .{value});
-        \\defer allocator.free(formatted);
-        \\
-        \\## Summary
-        \\- In main(): use `init.arena.allocator()`
-        \\- Collections store allocator, pass to deinit()
-        \\- For one-off allocations: pass allocator to function
+        \\## Resumo
+        \\- Use .empty para inicializar
+        \\- Passe allocator para TODOS os métodos
+        \\- Fonte: stdlib (array_list.zig, hash_map.zig)
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://templates/build.zig")) {
