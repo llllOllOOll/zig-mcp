@@ -288,22 +288,30 @@ fn handleResourcesRead(allocator: std.mem.Allocator, id: ?std.json.Value, params
 
     if (uri) |u| {
         const content = getResourceContent(u);
-        try list.appendSlice(allocator, ",\"result\":{\"contents\":[{\"uri\":\"");
-        try list.appendSlice(allocator, u);
-        try list.appendSlice(allocator, "\",\"mimeType\":\"text/plain\",\"text\":\"");
 
-        for (content) |byte| {
-            switch (byte) {
-                '"' => try list.appendSlice(allocator, "\\\""),
-                '\\' => try list.appendSlice(allocator, "\\\\"),
-                '\n' => try list.appendSlice(allocator, "\\n"),
-                '\r' => try list.appendSlice(allocator, "\\r"),
-                '\t' => try list.appendSlice(allocator, "\\t"),
-                else => try list.append(allocator, byte),
+        // Check if resource not found
+        if (std.mem.eql(u8, content, "Unknown resource")) {
+            try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"Resource not found: ");
+            try list.appendSlice(allocator, u);
+            try list.appendSlice(allocator, "\"}");
+        } else {
+            try list.appendSlice(allocator, ",\"result\":{\"contents\":[{\"uri\":\"");
+            try list.appendSlice(allocator, u);
+            try list.appendSlice(allocator, "\",\"mimeType\":\"text/plain\",\"text\":\"");
+
+            for (content) |byte| {
+                switch (byte) {
+                    '"' => try list.appendSlice(allocator, "\\\""),
+                    '\\' => try list.appendSlice(allocator, "\\\\"),
+                    '\n' => try list.appendSlice(allocator, "\\n"),
+                    '\r' => try list.appendSlice(allocator, "\\r"),
+                    '\t' => try list.appendSlice(allocator, "\\t"),
+                    else => try list.append(allocator, byte),
+                }
             }
-        }
 
-        try list.appendSlice(allocator, "\"}]}");
+            try list.appendSlice(allocator, "\"}]}");
+        }
     } else {
         try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"Missing uri\"}");
     }
