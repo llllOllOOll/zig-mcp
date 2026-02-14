@@ -1062,7 +1062,8 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
 
     if (std.mem.eql(u8, pattern, "list")) {
         try list.appendSlice(allocator,
-            \\\n            \\Available Zig 0.16 Patterns:
+            \\ 
+            \\Available Zig 0.16 Patterns:
             \\========================
             \\n            \\Use zig_patterns tool with pattern parameter:
             \\
@@ -1079,8 +1080,47 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\  - dynamic_lib    : Dynamic library build (NEW!)
             \\  - multimodule     : Multi-module project (NEW!)
             \\  - guidelines     : Complete Zig 0.16 guidelines
+            \\  - iommi          : Simple game mode (see grape-mcp!)
             \\  - list           : Show this list
             \\n            \\Example: zig_patterns with pattern="arraylist"
+        );
+    } else if (std.mem.eql(u8, pattern, "iommi")) {
+        return allocator.dupe(u8,
+            \\# IOMMI Mode - Simple Game Development
+            \\
+            \\For IOMMI mode (simple single-file games), use grape-mcp instead:
+            \\- Tool: grape_patterns with pattern="iommi"
+            \\- Resource: grape://patterns/iommi
+            \\- Or: grape://patterns/territory for full game mode
+            \\
+            \\IOMMI is Grape Cake's simple game mode:
+            \\- Single main.zig file, no dynamic library
+            \\- Use grape.run() with .initIommi and .updateIommi
+            \\- ctx.dt is a FIELD (not method!)
+            \\- ctx.getAxis() DOES NOT EXIST
+            \\
+            \\Quick example:
+            \\const grape = @import("grape_cake");
+            \\
+            \\pub fn main() !void {
+            \\    try grape.run(.{
+            \\        .title = "My Game",
+            \\        .initIommi = init,
+            \\        .updateIommi = update,
+            \\    });
+            \\}
+            \\
+            \\fn init(ctx: *grape.Iommi) !void {
+            \\    try ctx.registerAction("jump", &.{grape.KEY_SPACE});
+            \\}
+            \\
+            \\fn update(ctx: *grape.Iommi) void {
+            \\    const dt = ctx.dt;
+            \\    if (ctx.isDown("left")) player.x -= 100 * dt;
+            \\    ctx.drawRect(x, y, w, h, grape.RED);  // f32 params!
+            \\}
+            \\
+            \\# For full IOMMI documentation, use grape-mcp!
         );
     } else if (std.mem.eql(u8, pattern, "package")) {
         return allocator.dupe(u8,

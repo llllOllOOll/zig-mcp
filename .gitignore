@@ -1,3 +1,10 @@
 .zig-cache/
 zig-out/
 test
+test*
+.gemini/
+test-zig-mcp.js
+test_typescript/
+json_test2
+initcap
+final

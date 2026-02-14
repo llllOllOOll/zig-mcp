@@ -4,8 +4,8 @@ MCP Stdio Server providing Zig 0.16 tools, resources, and prompts for AI coding 
 
 ## Features
 
-- **5 Tools**: zig_version, zig_build, zig_run, zig_patterns, zig_help
-- **8 Resources**: patterns (ArrayList, HashMap, JSON, I/O, Allocator), templates, guidelines
+- **9 Tools**: zig_version, zig_build, zig_run, zig_test, zig_fetch, zig_fmt, zig_patterns, zig_resources, zig_help
+- **12 Resources**: patterns (ArrayList, HashMap, JSON, I/O, Allocator, Package, StaticLib, DynamicLib, MultiModule), templates, guidelines
 - **5 Prompts**: zig_arraylist, zig_hashmap, zig_json, zig_error_handling, zig_io
 
 ## Quick Test Commands
