@@ -282,29 +282,29 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\pub fn main() !void {
         \\    const allocator = std.heap.page_allocator;
         \\    
-        \\    // Inicializa vazio
-        \\    var list: std.ArrayList(u32) = .empty;
+        \\    // initCapacity(allocator, size) - inicializa com capacidade
+        \\    var list = try std.ArrayList(u32).initCapacity(allocator, 100);
         \\    
         \\    // append(allocator, item) - COM allocator!
         \\    try list.append(allocator, 10);
         \\    try list.append(allocator, 20);
-        \\    try list.append(allocator, 30);
         \\    
         \\    for (list.items) |item| {
         \\        std.debug.print("{d}\n", .{item});
         \\    }
         \\    
-        \\    _ = list.pop();
-        \\    
-        \\    // deinit(allocator) - COM allocator!
+        \\    // deinit(allocator) - SEMPRE com allocator!
         \\    list.deinit(allocator);
         \\}
         \\
-        \\// Métodos principais:
-        \\// - init(allocator) ou .empty - inicializa
+        \\// Ou com .empty:
+        \\// var list: std.ArrayList(u32) = .empty;
+        \\// try list.append(allocator, item);
+        \\// list.deinit(allocator);
+        \\
+        \\// Resumo:
+        \\// - init(allocator) ou initCapacity(allocator, size)
         \\// - append(allocator, item) - COM allocator!
-        \\// - appendSlice(allocator, items) - COM allocator!
-        \\// - pop() - remove último
         \\// - deinit(allocator) - COM allocator!
         \\
         ;
