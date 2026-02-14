@@ -288,7 +288,7 @@ fn handleResourcesRead(allocator: std.mem.Allocator, id: ?std.json.Value, params
 
     if (uri) |u| {
         const content = getResourceContent(u);
-        try list.appendSlice(allocator, ",\"contents\":[{\"uri\":\"");
+        try list.appendSlice(allocator, ",\"result\":{\"contents\":[{\"uri\":\"");
         try list.appendSlice(allocator, u);
         try list.appendSlice(allocator, "\",\"mimeType\":\"text/plain\",\"text\":\"");
 
@@ -303,7 +303,7 @@ fn handleResourcesRead(allocator: std.mem.Allocator, id: ?std.json.Value, params
             }
         }
 
-        try list.appendSlice(allocator, "\"}]");
+        try list.appendSlice(allocator, "\"}]}");
     } else {
         try list.appendSlice(allocator, ",\"error\":{\"code\":-32602,\"message\":\"Missing uri\"}");
     }
