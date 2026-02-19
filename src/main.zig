@@ -256,6 +256,10 @@ fn buildResourcesListResponse(allocator: std.mem.Allocator, id: ?std.json.Value)
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/static_lib\",\"name\":\"Static Library Patterns\",\"description\":\"Build static libraries with b.addLibrary\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/dynamic_lib\",\"name\":\"Dynamic Library Patterns\",\"description\":\"Build dynamic libraries with b.addLibrary\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/multimodule\",\"name\":\"Multi-Module Patterns\",\"description\":\"Multiple modules in one project\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/file_io\",\"name\":\"File I/O Patterns\",\"description\":\"File operations with std.Io.Dir.cwd() - REAL working examples\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/time\",\"name\":\"Time APIs\",\"description\":\"Instant, Timer, Clock.now() for timing and timestamps\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/json_complete\",\"name\":\"JSON Complete\",\"description\":\"Full JSON parsing with all options and file I/O\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/threads\",\"name\":\"Threading & Sync\",\"description\":\"std.Io.Mutex, std.Io.Condition, thread spawning\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://templates/build.zig\",\"name\":\"build.zig Template\",\"description\":\"Modern build.zig template for Zig 0.16\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://templates/build.zig.zon\",\"name\":\"build.zig.zon Template\",\"description\":\"Package manifest structure for Zig 0.16\",\"mimeType\":\"text/zon\"}");
 
@@ -360,37 +364,93 @@ fn getResourceContent(uri: []const u8) []const u8 {
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/arraylist")) {
         return 
-        \\// ArrayList Patterns em Zig 0.16
+        \\// ArrayList Patterns in Zig 0.16
         \\
         \\const std = @import("std");
         \\
         \\pub fn main() !void {
         \\    const allocator = std.heap.page_allocator;
         \\    
-        \\    // initCapacity(allocator, size) - inicializa com capacidade
-        \\    var list = try std.ArrayList(u32).initCapacity(allocator, 100);
+        \\    // ========================================
+        \\    // SIMPLEST: .empty (recommended for most cases)
+        \\    // Clean syntax, works for any size
+        \\    // ========================================
+        \\    var list: std.ArrayList(u32) = .empty;
+        \\    defer list.deinit(allocator);
         \\    
-        \\    // append(allocator, item) - COM allocator!
+        \\    // Performance: initCapacity (when size is known)
+        \\    // var list = try std.ArrayList(u32).initCapacity(allocator, 100);
+        \\    // defer list.deinit(allocator);
+        \\    
+        \\    // ========================================
+        \\    // ADDING ITEMS - ALWAYS pass allocator!
+        \\    // ========================================
+        \\    
+        \\    // Add single items
         \\    try list.append(allocator, 10);
         \\    try list.append(allocator, 20);
         \\    
+        \\    // Add multiple items at once
+        \\    try list.appendSlice(allocator, &[_]u32{ 30, 40, 50 });
+        \\    
+        \\    // ========================================
+        \\    // ACCESSING ITEMS
+        \\    // ========================================
+        \\    const first = list.items[0];           // Direct index
+        \\    const len = list.items.len;             // Get length
+        \\    const last = list.getLast();            // Get last item
+        \\    
+        \\    // ========================================
+        \\    // ITERATING
+        \\    // ========================================
         \\    for (list.items) |item| {
-        \\        std.debug.print("{d}\n", .{item});
+        \\        std.debug.print("{d}\\n", .{item});
         \\    }
         \\    
-        \\    // deinit(allocator) - SEMPRE com allocator!
-        \\    list.deinit(allocator);
+        \\    // With index
+        \\    for (list.items, 0..) |item, i| {
+        \\        std.debug.print("[{d}] = {d}\\n", .{ i, item });
+        \\    }
+        \\    
+        \\    // ========================================
+        \\    // REMOVING ITEMS
+        \\    // ========================================
+        \\    const removed = list.pop();             // Remove and return last
+        \\    list.clearRetainingCapacity();          // Clear but keep memory
+        \\    list.clearAndFree(allocator);           // Clear and free memory
         \\}
         \\
-        \\// Ou com .empty:
-        \\// var list: std.ArrayList(u32) = .empty;
-        \\// try list.append(allocator, item);
-        \\// list.deinit(allocator);
+        \\## Initialization Options:
+        \\//
+        \\// SIMPLEST (Recommended): .empty
+        \\//   var list: std.ArrayList(u32) = .empty;
+        \\//   defer list.deinit(allocator);
+        \\//   - Cleanest syntax
+        \\//   - Works for any size
+        \\//   - Grows automatically
+        \\//
+        \\// PERFORMANCE: initCapacity(allocator, size)
+        \\//   var list = try std.ArrayList(u32).initCapacity(allocator, 100);
+        \\//   defer list.deinit(allocator);
+        \\//   - Pre-allocates memory
+        \\//   - Better performance when size is known
+        \\//   - Avoids reallocations
+        \\//   Example: var lines = try std.ArrayList([]const u8).initCapacity(allocator, line_count);
+        \\//
+        \\// BASIC: init(allocator)
+        \\//   var list = std.ArrayList(u32).init(allocator);
+        \\//   defer list.deinit(allocator);
+        \\//   - Starts with capacity 0
+        \\//   - Explicit initialization
         \\
-        \\// Resumo:
-        \\// - init(allocator) ou initCapacity(allocator, size)
-        \\// - append(allocator, item) - COM allocator!
-        \\// - deinit(allocator) - COM allocator!
+        \\## Key Points:
+        \\// 1. .empty - Simplest, recommended for most cases
+        \\// 2. initCapacity() - Use when performance matters and size is known
+        \\// 3. append(allocator, item) - Add single item
+        \\// 4. appendSlice(allocator, slice) - Add multiple items
+        \\// 5. deinit(allocator) - Cleanup (always required!)
+        \\// 6. Access items via list.items array
+        \\// 7. Use defer list.deinit(allocator) immediately after init!
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/hashmap")) {
@@ -463,10 +523,11 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\}
         \\
         \\## Key Points
-        \\- All I/O needs `io` from `init.io`
-        \\- Need buffer for Reader/Writer
-        \\- Always flush after writing to stdout
-        \\- stderr is good for logging (doesn't interfere with protocol)
+        \\// - All I/O needs `io` from `init.io`
+        \\// - Need buffer for Reader/Writer
+        \\// - Always flush after writing to stdout
+        \\// - stderr is good for logging (doesn't interfere with protocol)
+        \\// - OLD API DEPRECATED: std.fs.cwd().readFileAlloc() - use std.Io.Dir.cwd() instead!
         \\
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/allocator")) {
@@ -726,6 +787,461 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\// - b.createModule() for each module
         \\// - .imports to specify dependencies
         \\// - .name is how you import in @import()
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/file_io")) {
+        return 
+        \\// File I/O Patterns in Zig 0.16
+        \\// REAL EXAMPLES - Tested and working!
+        \\
+        \\const std = @import("std");
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const io = init.io;
+        \\    const allocator = init.arena.allocator();
+        \\
+        \\    // ========================================
+        \\    // READ FILE - New API (std.Io.Dir.cwd())
+        \\    // ========================================
+        \\    const contents = try std.Io.Dir.cwd().readFileAlloc(
+        \\        io,                    // REQUIRED: io context
+        \\        "config.json",         // file path
+        \\        allocator,             // allocator
+        \\        .limited(1024 * 1024 * 50)  // max size limit
+        \\    );
+        \\    defer allocator.free(contents);
+        \\
+        \\    // ========================================
+        \\    // WRITE FILE - New API
+        \\    // ========================================
+        \\    const json_str = try std.json.stringifyAlloc(allocator, my_data, .{
+        \\        .whitespace = .indent_2,
+        \\    });
+        \\    defer allocator.free(json_str);
+        \\
+        \\    const file = try std.Io.Dir.cwd().createFile(io, "output.json", .{});
+        \\    defer file.close(io);  // NOTE: requires io parameter!
+        \\    try file.writeStreamingAll(io, json_str);
+        \\
+        \\    // ========================================
+        \\    // OPEN EXISTING FILE - New API
+        \\    // ========================================
+        \\    const existing_file = try std.Io.Dir.cwd().openFile(
+        \\        io,
+        \\        "data.txt",
+        \\        .{ .mode = .read_only }  // or .write_only, .read_write
+        \\    );
+        \\    defer existing_file.close(io);
+        \\
+        \\    // Read with Reader
+        \\    var buffer: [4096]u8 = undefined;
+        \\    var file_reader = existing_file.reader(io, &buffer);
+        \\    const reader = &file_reader.interface;
+        \\    const line = try reader.takeDelimiterInclusive('\n');
+        \\
+        \\    // ========================================
+        \\    // DIRECTORY OPERATIONS
+        \\    // ========================================
+        \\    // Create directory
+        \\    try std.Io.Dir.cwd().createDir(io, "my_directory", .default_dir);
+        \\
+        \\    // Open directory
+        \\    var dir = try std.Io.Dir.cwd().openDir(io, "my_directory", .{});
+        \\    defer dir.close(io);
+        \\
+        \\    // Check if exists
+        \\    var exists_dir = std.Io.Dir.cwd().openDir(io, "maybe_exists", .{}) catch null;
+        \\    if (exists_dir) |*d| {
+        \\        d.close(io);
+        \\    }
+        \\}
+        \\
+        \\## Key Differences from OLD API
+        \\// OLD (DEPRECATED): std.fs.cwd().readFileAlloc(allocator, path, max_size)
+        \\// NEW: std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_size))
+        \\//
+        \\// OLD (DEPRECATED): file.close()
+        \\// NEW: file.close(io)
+        \\//
+        \\// OLD (DEPRECATED): std.fs.cwd().createFile(path, .{})
+        \\// NEW: std.Io.Dir.cwd().createFile(io, path, .{})
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/time")) {
+        return 
+        \\// Time APIs in Zig 0.16
+        \\// Complete guide with std.Io.Timestamp and std.Io.Duration
+        \\
+        \\const std = @import("std");
+        \\const c = @cImport({
+        \\    @cInclude("time.h");
+        \\});
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const io = init.io;
+        \\    
+        \\    // ========================================
+        \\    // POSIX NANOSLEEP - Sleep without blocking Io
+        \\    // ========================================
+        \\    var timespec: std.posix.timespec = .{ .sec = 1, .nsec = 0 };
+        \\    _ = std.posix.system.nanosleep(&timespec, &timespec);
+        \\    
+        \\    // ========================================
+        \\    // CLOCK - Get current timestamp
+        \\    // Returns std.Io.Timestamp with nanosecond precision
+        \\    // ========================================
+        \\    const timestamp = std.Io.Clock.now(.real, io);
+        \\    const seconds = timestamp.toSeconds();      // i64
+        \\    const millis = timestamp.toMilliseconds();  // i64
+        \\    const nanos = timestamp.toNanoseconds();    // i96
+        \\
+        \\    // ========================================
+        \\    // TIMESTAMP OPERATIONS
+        \\    // ========================================
+        \\    // Create timestamp from components
+        \\    // Note: Timestamp only has fromNanoseconds(), use Duration for conversion
+        \\    
+        \\    const ts_from_ns = std.Io.Timestamp.fromNanoseconds(1_000_000_000);
+        \\    
+        \\    // Calculate duration between timestamps
+        \\    const duration = timestamp.durationTo(future_ts);
+        \\    const duration_ms = duration.toMilliseconds();
+        \\    
+        \\    // Add/subtract duration from timestamp
+        \\    const later = timestamp.addDuration(duration);
+        \\    const earlier = timestamp.subDuration(duration);
+        \\    
+        \\    // Compare timestamps
+        \\    const is_future = ts_from_ns.toNanoseconds() > timestamp.toNanoseconds();  // greater than
+        \\    const is_past = ts_from_ns.toNanoseconds() < timestamp.toNanoseconds();     // less than
+        \\
+        \\    // ========================================
+        \\    // DURATION - Time intervals
+        \\    // ========================================
+        \\    // Create durations
+        \\    const one_second = std.Io.Duration.fromSeconds(1);
+        \\    const one_milli = std.Io.Duration.fromMilliseconds(1000);
+        \\    const one_nano = std.Io.Duration.fromNanoseconds(1_000_000_000);
+        \\    
+        \\    // Sleep for a duration
+        \\    try std.Io.Duration.fromSeconds(1).sleep(io);
+        \\    
+        \\    // Duration constants
+        \\    const zero_duration = std.Io.Duration.zero;
+        \\    const max_duration = std.Io.Duration.max;
+        \\
+        \\    // ========================================
+        \\    // CLOCK-SPECIFIC TIMESTAMP (Clock.Timestamp)
+        \\    // For operations that need clock context
+        \\    // ========================================
+        \\    const clock_ts = std.Io.Clock.Timestamp.now(io, .real);
+        \\    
+        \\    // Wait until a specific time
+        \\    // try clock_ts.wait(io);
+        \\    
+        \\    // Convert between clocks
+        \\    const boot_ts = clock_ts.toClock(io, .boot);
+        \\    
+        \\    // Calculate time remaining until timestamp
+        \\    const time_remaining = clock_ts.durationFromNow(io);
+        \\    
+        \\    // Calculate time elapsed since timestamp
+        \\    const time_elapsed = clock_ts.untilNow(io);
+        \\
+        \\    // ========================================
+        \\    // CLOCK TYPES
+        \\    // ========================================
+        \\    // .real    - Wall clock time (Unix epoch, affected by system time changes)
+        \\    // .awake   - Monotonic, excludes suspended time
+        \\    // .boot    - Monotonic, includes suspended time  
+        \\    // .cpu_process - CPU time used by process
+        \\    // .cpu_thread  - CPU time used by thread
+        \\    const real_ts = std.Io.Clock.now(.real, io);
+        \\    const awake_ts = std.Io.Clock.now(.awake, io);
+        \\    const boot_ts2 = std.Io.Clock.now(.boot, io);
+        \\
+        \\    // ========================================
+        \\    // C FALLBACK - When linking with libc
+        \\    // ========================================
+        \\    const c_time = c.time(null);
+        \\    
+        \\    var ts: c.timespec = undefined;
+        \\    _ = c.clock_gettime(c.CLOCK_MONOTONIC, &ts);
+        \\    const nanos_c = @as(u64, @intCast(ts.tv_sec)) * 1_000_000_000 + 
+        \\                   @as(u64, @intCast(ts.tv_nsec));
+        \\}
+        \\
+        \\## Key Types and Methods
+        \\//
+        \\// std.Io.Timestamp - Raw timestamp (nanoseconds since epoch)
+        \\//   .now(io, clock)              - Get current time
+        \\//   .fromSeconds(s)              - Create from seconds
+        \\//   .fromMilliseconds(ms)        - Create from milliseconds
+        \\//   .fromNanoseconds(ns)         - Create from nanoseconds
+        \\//   .toSeconds()                 - Convert to seconds (i64)
+        \\//   .toMilliseconds()            - Convert to milliseconds (i64)
+        \\//   .toNanoseconds()             - Convert to nanoseconds (i96)
+        \\//   .durationTo(other)           - Duration between timestamps
+        \\//   .addDuration(d)              - Add duration to timestamp
+        \\//   .subDuration(d)              - Subtract duration from timestamp
+        \\//   .compare(op, other)          - Compare two timestamps
+        \\//   .zero                        - Zero timestamp constant
+        \\//
+        \\// std.Io.Clock.Timestamp - Clock-aware timestamp
+        \\//   .now(io, clock)              - Get current time with clock context
+        \\//   .wait(io)                    - Sleep until this time
+        \\//   .toClock(io, clock)          - Convert to different clock
+        \\//   .durationFromNow(io)         - Time until this timestamp
+        \\//   .untilNow(io)                - Time since this timestamp
+        \\//   .addDuration(d)              - Add duration
+        \\//   .subDuration(d)              - Subtract duration
+        \\//   .durationTo(other)           - Duration to another timestamp
+        \\//
+        \\// std.Io.Duration - Time intervals
+        \\//   .fromSeconds(s)              - Create from seconds
+        \\//   .fromMilliseconds(ms)        - Create from milliseconds
+        \\//   .fromNanoseconds(ns)         - Create from nanoseconds
+        \\//   .toSeconds()                 - Convert to seconds
+        \\//   .toMilliseconds()            - Convert to milliseconds
+        \\//   .sleep(io)                   - Sleep for this duration
+        \\//   .zero                        - Zero duration
+        \\//   .max                         - Maximum duration
+        \\//
+        \\// std.Io.Clock.Duration - Clock-aware duration
+        \\//   .sleep(io)                   - Sleep on specific clock
+        \\//
+        \\// Clock Types:
+        \\//   .real         - Wall clock (Unix epoch, affected by NTP)
+        \\//   .awake        - Monotonic, excludes suspend time
+        \\//   .boot         - Monotonic, includes suspend time
+        \\//   .cpu_process  - CPU time for process
+        \\//   .cpu_thread   - CPU time for thread
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/json_complete")) {
+        return 
+        \\// JSON Parsing Complete Guide - Zig 0.16
+        \\// REAL EXAMPLES with all options
+        \\
+        \\const std = @import("std");
+        \\
+        \\// Define your structs
+        \\const Person = struct {
+        \\    name: []const u8,
+        \\    age: u32,
+        \\};
+        \\
+        \\const Config = struct {
+        \\    port: u16,
+        \\    host: []const u8,
+        \\    debug: bool,
+        \\};
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const allocator = init.arena.allocator();
+        \\
+        \\    // ========================================
+        \\    // BASIC PARSING
+        \\    // ========================================
+        \\    const json_str = "{\"name\":\"Alice\",\"age\":30}";
+        \\    var parsed = try std.json.parseFromSlice(
+        \\        Person,           // target type
+        \\        allocator,
+        \\        json_str,
+        \\        .{}               // default options
+        \\    );
+        \\    defer parsed.deinit();
+        \\    std.debug.print("Name: {s}\n", .{parsed.value.name});
+        \\
+        \\    // ========================================
+        \\    // PARSING WITH OPTIONS
+        \\    // ========================================
+        \\    const json_with_extra = "{\"name\":\"Bob\",\"age\":25,\"extra\":\"field\"}";
+        \\    var parsed2 = try std.json.parseFromSlice(
+        \\        Person,
+        \\        allocator,
+        \\        json_with_extra,
+        \\        .{
+        \\            .ignore_unknown_fields = true,  // Ignore extra fields
+        \\            .allocate = .alloc_always,      // Always allocate strings
+        \\        }
+        \\    );
+        \\    defer parsed2.deinit();
+        \\
+        \\    // ========================================
+        \\    // DYNAMIC PARSING (unknown structure)
+        \\    // ========================================
+        \\    var dynamic = try std.json.parseFromSlice(
+        \\        std.json.Value,
+        \\        allocator,
+        \\        json_str,
+        \\        .{}
+        \\    );
+        \\    defer dynamic.deinit();
+        \\    
+        \\    // Access fields
+        \\    const name = dynamic.value.object.get("name").?.string;
+        \\    const age = dynamic.value.object.get("age").?.integer;
+        \\
+        \\    // ========================================
+        \\    // STRINGIFY (struct to JSON)
+        \\    // ========================================
+        \\    const person = Person{ .name = "Charlie", .age = 35 };
+        \\    
+        \\    // Compact JSON
+        \\    const compact = try std.json.stringifyAlloc(allocator, person, .{});
+        \\    defer allocator.free(compact);
+        \\    
+        \\    // Pretty printed JSON
+        \\    const pretty = try std.json.stringifyAlloc(allocator, person, .{
+        \\        .whitespace = .indent_2,
+        \\    });
+        \\    defer allocator.free(pretty);
+        \\
+        \\    // ========================================
+        \\    // NEW API: std.json.Stringify.valueAlloc
+        \\    // ========================================
+        \\    const json_output = try std.json.Stringify.valueAlloc(
+        \\        allocator,
+        \\        person,
+        \\        .{ .whitespace = .indent_2 }
+        \\    );
+        \\    defer allocator.free(json_output);
+        \\
+        \\    // ========================================
+        \\    // PARSING FROM FILE (common pattern)
+        \\    // ========================================
+        \\    const config = try parseConfigFile(init, "config.json");
+        \\    defer config.parsed.deinit();
+        \\    defer init.arena.allocator().free(config.data);
+        \\}
+        \\
+        \\fn parseConfigFile(init: std.process.Init, path: []const u8) !struct {
+        \\    parsed: std.json.Parsed(Config),
+        \\    data: []u8,
+        \\} {
+        \\    const io = init.io;
+        \\    const allocator = init.arena.allocator();
+        \\    
+        \\    const contents = try std.Io.Dir.cwd().readFileAlloc(
+        \\        io, path, allocator, .limited(1024 * 1024 * 50)
+        \\    );
+        \\    errdefer allocator.free(contents);
+        \\    
+        \\    const parsed = try std.json.parseFromSlice(
+        \\        Config, allocator, contents,
+        \\        .{ .ignore_unknown_fields = true }
+        \\    );
+        \\    
+        \\    return .{
+        \\        .parsed = parsed,
+        \\        .data = contents,
+        \\    };
+        \\}
+        \\
+        \\## Common Options
+        \\// .ignore_unknown_fields = true  - Skip unknown JSON fields
+        \\// .allocate = .alloc_always     - Always allocate strings
+        \\// .allocate = .alloc_if_needed  - Only allocate if necessary
+        \\// .max_value_len = N            - Limit string length
+        \\
+        ;
+    } else if (std.mem.eql(u8, uri, "zig://patterns/threads")) {
+        return 
+        \\// Threading & Synchronization - Zig 0.16
+        \\// IMPORTANT API CHANGES in 0.16.0-dev.2565+
+        \\
+        \\const std = @import("std");
+        \\
+        \\// ========================================
+        \\// WHAT DOES NOT EXIST in Zig 0.16
+        \\// ========================================
+        \\// std.Thread.Mutex — does not exist
+        \\// std.Thread.Condition — does not exist  
+        \\// std.ThreadPool — does not exist
+        \\
+        \\// ========================================
+        \\// WHAT EXISTS (requires Io context)
+        \\// ========================================
+        \\// std.Io.Mutex — requires Io parameter
+        \\// std.Io.Condition — requires Io parameter
+        \\// std.os.linux.futex — raw syscall, no Io needed
+        \\// Thread.yield() — cooperative yield
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const io = init.io;
+        \\    const allocator = init.arena.allocator();
+        \\
+        \\    // ========================================
+        \\    // std.Io.Mutex API
+        \\    // ========================================
+        \\    var mutex = std.Io.Mutex{};
+        \\    
+        \\    // Lock with Io context
+        \\    try mutex.lock(io);
+        \\    defer mutex.unlock(io);
+        \\    
+        \\    // Critical section here
+        \\    // ...
+        \\
+        \\    // ========================================
+        \\    // std.Io.Condition API
+        \\    // ========================================
+        \\    var condition = std.Io.Condition{};
+        \\    
+        \\    // Wait for condition (releases mutex while waiting)
+        \\    try condition.wait(io, &mutex);
+        \\    
+        \\    // Or uncancelable wait
+        \\    condition.waitUncancelable(io, &mutex);
+        \\    
+        \\    // Signal one waiting thread
+        \\    condition.signal(io);
+        \\    
+        \\    // Broadcast to all waiting threads
+        \\    condition.broadcast(io);
+        \\
+        \\    // ========================================
+        \\    // Spawning Threads
+        \\    // ========================================
+        \\    const thread = try std.Thread.spawn(.{}, workerFn, .{io, &mutex});
+        \\    defer thread.join();
+        \\}
+        \\
+        \\fn workerFn(io: std.Io, mutex: *std.Io.Mutex) !void {
+        \\    // Each worker needs Io context passed from parent
+        \\    try mutex.lock(io);
+        \\    defer mutex.unlock(io);
+        \\    
+        \\    // Do work...
+        \\}
+        \\
+        \\// ========================================
+        \\// Thread-safe counter example
+        \\// ========================================
+        \\const ThreadSafeCounter = struct {
+        \\    mutex: std.Io.Mutex = .{},
+        \\    value: u64 = 0,
+        \\    
+        \\    pub fn increment(self: *ThreadSafeCounter, io: std.Io) !void {
+        \\        try self.mutex.lock(io);
+        \\        defer self.mutex.unlock(io);
+        \\        self.value += 1;
+        \\    }
+        \\    
+        \\    pub fn get(self: *ThreadSafeCounter, io: std.Io) !u64 {
+        \\        try self.mutex.lock(io);
+        \\        defer self.mutex.unlock(io);
+        \\        return self.value;
+        \\    }
+        \\};
+        \\
+        \\## Key Points
+        \\// - std.Thread.Mutex DOES NOT EXIST in Zig 0.16
+        \\// - Use std.Io.Mutex with Io parameter
+        \\// - Pass Io context to worker threads
+        \\// - std.Io.Condition for thread signaling
+        \\// - Investigate if Io is safe to share across threads
         \\
         ;
     }
@@ -1062,27 +1578,35 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
 
     if (std.mem.eql(u8, pattern, "list")) {
         try list.appendSlice(allocator,
-            \\ 
             \\Available Zig 0.16 Patterns:
             \\========================
-            \\n            \\Use zig_patterns tool with pattern parameter:
-            \\
-            \\  - arraylist      : ArrayList usage patterns
+            \\Use zig_patterns tool with pattern parameter:
+            \\n            \\  - arraylist      : ArrayList usage patterns
             \\  - hashmap        : HashMap usage patterns  
-            \\  - json           : JSON parsing/stringifying
-            \\  - io             : I/O patterns (stdin/stdout/stderr)
+            \\  - json           : JSON parsing/stringifying (basic)
+            \\  - json_complete  : JSON with all options + file I/O (NEW!)
+            \\  - io             : I/O patterns (stdin/stdout/stderr) - DEPRECATED FILE API!
+            \\  - file_io        : File operations with std.Io.Dir.cwd() (NEW!)
             \\  - allocator      : Memory allocator patterns
             \\  - error_handling : Error handling techniques
+            \\  - time           : Time APIs - Instant, Timer, Clock.now() (NEW!)
+            \\  - threads        : Threading & sync - std.Io.Mutex, std.Io.Condition (NEW!)
             \\  - build_template : build.zig template
             \\  - zon_template   : build.zig.zon template
             \\  - package        : ZON package manifest (NEW!)
             \\  - static_lib     : Static library build (NEW!)
             \\  - dynamic_lib    : Dynamic library build (NEW!)
-            \\  - multimodule     : Multi-module project (NEW!)
+            \\  - multimodule    : Multi-module project (NEW!)
             \\  - guidelines     : Complete Zig 0.16 guidelines
             \\  - iommi          : Simple game mode (see grape-mcp!)
             \\  - list           : Show this list
             \\n            \\Example: zig_patterns with pattern="arraylist"
+            \\n            \\IMPORTANT NOTES:
+            \\  - 'io' pattern shows OLD deprecated file API (std.fs.cwd())
+            \\  - Use 'file_io' pattern for correct NEW API (std.Io.Dir.cwd())
+            \\  - Use 'json_complete' for full JSON with file reading examples
+            \\  - Use 'time' for timing, benchmarks, and timestamps
+            \\  - Use 'threads' for std.Io.Mutex, std.Io.Condition (std.Thread.Mutex DOES NOT EXIST!)
         );
     } else if (std.mem.eql(u8, pattern, "iommi")) {
         return allocator.dupe(u8,
@@ -1682,67 +2206,206 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\    },
             \\}
         );
-    } else if (std.mem.eql(u8, pattern, "guidelines")) {
+    } else if (std.mem.eql(u8, pattern, "threads")) {
         try list.appendSlice(allocator,
-            \\\n            \\Zig 0.16 Guidelines
-            \\====================
-            \\n            \\## Core Principles
-            \\---------------
-            \\1. Explicit is better than implicit
-            \\2. No hidden allocations - allocator always explicit
-            \\3. No hidden control flow - errors are explicit
-            \\4. Compile-time computation when possible
-            \\5. Simplicity over features
-            \\n            \\## ArrayList
+            \\\n            \\Threading & Synchronization in Zig 0.16 (std.Io)
+            \\================================================
+            \\IMPORTANT: std.Thread.Mutex DOES NOT EXIST! Use std.Io.Mutex
+            \\n            \\const std = @import("std");
+            \\n            \\pub fn main(init: std.process.Init) !void {
+            \\    const io = init.io;
+            \\    const allocator = init.arena.allocator();
+            \\
+            \\    // ========================================
+            \\    // std.Io.Group - Thread Pool
+            \\    // ========================================
+            \\    var group: std.Io.Group = .init;
+            \\    defer group.deinit();
+            \\
+            \\    // Spawn concurrent tasks (auto-managed thread pool)
+            \\    try group.concurrent(io, myTask, .{ arg1, arg2 });
+            \\    try group.concurrent(io, myTask, .{ arg3, arg4 });
+            \\
+            \\    // Wait for all tasks to complete
+            \\    try group.await(io);
+            \\
+            \\    // ========================================
+            \\    // std.Io.Mutex - Mutual Exclusion
+            \\    // ========================================
+            \\    var mutex: std.Io.Mutex = .init;
+            \\    defer mutex.deinit();
+            \\
+            \\    // Lock before accessing shared data
+            \\    try mutex.lock(io);
+            \\    defer mutex.unlock(io);
+            \\    // ... critical section ...
+            \\
+            \\    // ========================================
+            \\    // std.Io.Condition - Wait/Notify
+            \\    // ========================================
+            \\    var cond: std.Io.Condition = .init;
+            \\    defer cond.deinit();
+            \\    var mutex2: std.Io.Mutex = .init;
+            \\    defer mutex2.deinit();
+            \\
+            \\    // Wait for signal
+            \\    try mutex2.lock(io);
+            \\    defer mutex2.unlock(io);
+            \\    while (!some_condition) {
+            \\        try cond.wait(io, &mutex2);
+            \\    }
+            \\
+            \\    // Signal one thread
+            \\    cond.signal(io);
+            \\
+            \\    // Broadcast to all waiting threads
+            \\    cond.broadcast(io);
+            \\}
+            \\n            \\// ========================================
+            \\// Task function for Group.concurrent
+            \\// ========================================
+            \\fn myTask(allocator: std.mem.Allocator, data: *MyData) void {
+            \\    // Do work...
+            \\    // Can use allocator and other args passed in
+            \\}
+            \\n            \\// ========================================
+            \\// Shared data with Mutex protection
+            \\// ========================================
+            \\const SharedData = struct {
+            \\    value: i32,
+            \\    mutex: std.Io.Mutex,
+            \\
+            \\    pub fn increment(self: *SharedData, io: std.Io) !void {
+            \\        try self.mutex.lock(io);
+            \\        defer self.mutex.unlock(io);
+            \\        self.value += 1;
+            \\    }
+            \\};
+            \\n            \\## Key Points:
             \\-----------
-            \\var list: std.ArrayList(u32) = .empty;
-            \\try list.append(allocator, item);  // COM allocator!
-            \\list.deinit(allocator);            // COM allocator!
-            \\for (list.items) |item| { ... }
-            \\ 
-            \\## HashMap
-            \\---------
-            \\var map: std.StringHashMap(u32) = .empty;
-            \\try map.put(allocator, key, value);  // COM allocator!
-            \\map.deinit(allocator);               // COM allocator!
-            \\if (map.get(key)) |value| { ... }
-            \\ 
-            \\## Arena Allocator (main)
-            \\-------------------------
+            \\1. Use std.Io.Group for managed thread pools
+            \\2. Use std.Io.Mutex for protecting shared state
+            \\3. Use std.Io.Condition for wait/notify patterns
+            \\4. std.Thread.Mutex does NOT exist!
+            \\5. Always unlock in defer or after critical section
+            \\6. Group.concurrent auto-manages thread creation
+            \\7. Pass Io context to all async operations
+        );
+    } else if (std.mem.eql(u8, pattern, "time")) {
+        try list.appendSlice(allocator,
+            \\\n            \\Time APIs in Zig 0.16 (std.Io)
+            \\================================
+            \\Complete guide with std.Io.Timestamp, std.Io.Duration, and std.Io.Clock
+            \\n            \\const std = @import("std");
+            \\n            \\pub fn main(init: std.process.Init) !void {
+            \\    const io = init.io;
+            \\    
+            \\    // ========================================
+            \\    // POSIX NANOSLEEP - Sleep without blocking Io
+            \\    // ========================================
+            \\    var timespec: std.posix.timespec = .{ .sec = 1, .nsec = 0 };
+            \\    _ = std.posix.system.nanosleep(&timespec, &timespec);
+            \\    
+            \\    // ========================================
+            \\    // CLOCK - Get current timestamp
+            \\    // Returns std.Io.Timestamp with nanosecond precision
+            \\    // ========================================
+            \\    const timestamp = std.Io.Clock.now(.real, io);
+            \\    const seconds = timestamp.toSeconds();      // i64
+            \\    const millis = timestamp.toMilliseconds();  // i64
+            \\    const nanos = timestamp.toNanoseconds();    // i96
+            \\
+            \\    // ========================================
+            \\    // TIMESTAMP OPERATIONS
+            \\    // ========================================
+            \\    // Create timestamp from components
+            \\    // Note: Timestamp only has fromNanoseconds(), use Duration for conversion
+            \\    const ts_from_ns = std.Io.Timestamp.fromNanoseconds(1_000_000_000);
+            \\    
+            \\    // Calculate duration between timestamps
+            \\    const duration = timestamp.durationTo(ts_from_ns);
+            \\    const duration_ms = duration.toMilliseconds();
+            \\    
+            \\    // Add/subtract duration from timestamp
+            \\    const later = timestamp.addDuration(duration);
+            \\    const earlier = timestamp.subDuration(duration);
+            \\    
+            \\    // Compare timestamps
+            \\    const is_future = ts_from_ns.toNanoseconds() > timestamp.toNanoseconds();  // greater than
+            \\    const is_past = ts_from_ns.toNanoseconds() < timestamp.toNanoseconds();     // less than
+            \\
+            \\    // ========================================
+            \\    // DURATION - Time intervals
+            \\    // ========================================
+            \\    // Create durations
+            \\    const one_second = std.Io.Duration.fromSeconds(1);
+            \\    const one_milli = std.Io.Duration.fromMilliseconds(1000);
+            \\    const one_nano = std.Io.Duration.fromNanoseconds(1_000_000_000);
+            \\    
+            \\    // Sleep for a duration
+            \\    try std.Io.Duration.fromSeconds(1).sleep(io);
+            \\    
+            \\    // Duration constants
+            \\    const zero_duration = std.Io.Duration.zero;
+            \\    const max_duration = std.Io.Duration.max;
+            \\
+            \\    // ========================================
+            \\    // CLOCK-SPECIFIC TIMESTAMP (Clock.Timestamp)
+            \\    // For operations that need clock context
+            \\    // ========================================
+            \\    const clock_ts = std.Io.Clock.Timestamp.now(io, .real);
+            \\    
+            \\    // Wait until a specific time
+            \\    // try clock_ts.wait(io);
+            \\    
+            \\    // Convert between clocks
+            \\    const boot_ts = clock_ts.toClock(io, .boot);
+            \\    
+            \\    // Calculate time remaining until timestamp
+            \\    const time_remaining = clock_ts.durationFromNow(io);
+            \\    
+            \\    // Calculate time elapsed since timestamp
+            \\    const time_elapsed = clock_ts.untilNow(io);
+            \\
+            \\    // ========================================
+            \\    // CLOCK TYPES
+            \\    // ========================================
+            \\    // .real    - Wall clock time (Unix epoch, affected by system time changes)
+            \\    // .awake   - Monotonic, excludes suspended time
+            \\    // .boot    - Monotonic, includes suspended time  
+            \\    // .cpu_process - CPU time used by process
+            \\    // .cpu_thread  - CPU time used by thread
+            \\    const real_ts = std.Io.Clock.now(.real, io);
+            \\    const awake_ts = std.Io.Clock.now(.awake, io);
+            \\    const boot_ts2 = std.Io.Clock.now(.boot, io);
+            \\    const cpu_proc_ts = std.Io.Clock.now(.cpu_process, io);
+            \\    const cpu_thread_ts = std.Io.Clock.now(.cpu_thread, io);
+            \\}
+            \\n            \\// ========================================
+            \\// Time with Arena Allocator (recommended for main)
+            \\// ========================================
             \\pub fn main(init: std.process.Init) !void {
             \\    const allocator = init.arena.allocator();
+            \\    const io = init.io;
+            \\
+            \\    // Get current time
+            \\    const now = std.Io.Clock.now(.real, io);
+            \\    
+            \\    // Format time (using PrintOptions)
+            \\    var buf: [64]u8 = undefined;
+            \\    var f = std.Io.BufferedWriter(.{}, std.Io.File.stdout(), io, &buf);
+            \\    try f.writer().print("{}\n", .{now});
+            \\    try f.flush();
             \\}
-            \\ 
-            \\## Error Handling
-            \\---------------
-            \\✓ try function() - propagate error
-            \\  function() catch |err| handle(err) - catch and handle
-            \\  if (function()) |val| { } else |err| { } - if-else
-            \\  value orelse default - optional fallback
-            \\ 
-            \\## I/O
-            \\-----
-            \\const io = init.io;
-            \\var writer: Io.File.Writer = .init(Io.File.stdout(), io, &buffer);
-            \\try writer.flush();  // Always flush!
-            \\ 
-            \\## Memory Safety
-            \\-------------
-            \\- No use after free
-            \\- Use defer for cleanup
-            \\- Check bounds
-            \\- Explicit allocator passing
-            \\ 
-            \\## Build System
-            \\-------------
-            \\- b.path("src/main.zig") - use b.path()
-            \\- b.installArtifact(exe) - install executable
-            \\- b.step("run", "Run") - custom steps
-            \\ 
-            \\## Reference
-            \\---------
-            \\- Standard library: /home/seven/zig/lib/std/
-            \\- Language reference: ziglang.org/documentation/master/
+            \\n            \\## Key Points:
+            \\-----------
+            \\1. std.Io.Clock.now(clock, io) - Get current timestamp
+            \\2. std.Io.Duration for time intervals (fromSeconds, fromMilliseconds, etc.)
+            \\3. timestamp.toSeconds(), .toMilliseconds(), .toNanoseconds() - conversions
+            \\4. timestamp.addDuration(), .subDuration() - time arithmetic
+            \\5. duration.sleep(io) - sleep for duration
+            \\6. Clock types: .real (wall), .awake (monotonic), .boot, .cpu_process, .cpu_thread
+            \\7. std.posix.system.nanosleep() for POSIX sleep
         );
     } else {
         try list.appendSlice(allocator, "Unknown pattern. Use 'list' to see available patterns.");
@@ -1911,13 +2574,30 @@ fn runCommand(init: std.process.Init, allocator: std.mem.Allocator, argv: []cons
         .stderr = .pipe,
     });
 
+    _ = try child.wait(io);
+
     var stdout_list: std.ArrayList(u8) = .empty;
     defer stdout_list.deinit(allocator);
     var stderr_list: std.ArrayList(u8) = .empty;
     defer stderr_list.deinit(allocator);
 
-    try child.collectOutput(allocator, &stdout_list, &stderr_list, std.math.maxInt(usize));
-    _ = try child.wait(io);
+    // Read stdout
+    if (child.stdout) |stdout_file| {
+        var buf: [4096]u8 = undefined;
+        var reader = stdout_file.reader(io, &buf);
+        const r = &reader.interface;
+        r.appendRemainingUnlimited(allocator, &stdout_list) catch {};
+        stdout_file.close(io);
+    }
+
+    // Read stderr
+    if (child.stderr) |stderr_file| {
+        var buf: [4096]u8 = undefined;
+        var reader = stderr_file.reader(io, &buf);
+        const r = &reader.interface;
+        r.appendRemainingUnlimited(allocator, &stderr_list) catch {};
+        stderr_file.close(io);
+    }
 
     const stdout = try stdout_list.toOwnedSlice(allocator);
     defer allocator.free(stdout);
