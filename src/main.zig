@@ -2208,88 +2208,145 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
         );
     } else if (std.mem.eql(u8, pattern, "threads")) {
         try list.appendSlice(allocator,
-            \\\n            \\Threading & Synchronization in Zig 0.16 (std.Io)
-            \\================================================
-            \\IMPORTANT: std.Thread.Mutex DOES NOT EXIST! Use std.Io.Mutex
+            \\\n            \\Threading & Synchronization in Zig 0.16
+            \\==========================================
+            \\IMPORTANT: This covers BOTH std.Thread AND std.Io APIs
             \\n            \\const std = @import("std");
-            \\n            \\pub fn main(init: std.process.Init) !void {
+            \\
+            \\pub fn main(init: std.process.Init) !void {
             \\    const io = init.io;
             \\    const allocator = init.arena.allocator();
             \\
             \\    // ========================================
-            \\    // std.Io.Group - Thread Pool
+            \\    // 1. THREAD.SPAWN + JOIN (basic threads)
             \\    // ========================================
-            \\    var group: std.Io.Group = .init;
-            \\    defer group.deinit();
+            \\    fn minhaFuncao(param: u32) void {
+            \\        std.debug.print("thread {} running\\n", .{param});
+            \\    }
             \\
-            \\    // Spawn concurrent tasks (auto-managed thread pool)
-            \\    try group.concurrent(io, myTask, .{ arg1, arg2 });
-            \\    try group.concurrent(io, myTask, .{ arg3, arg4 });
+            \\    const t1 = try std.Thread.spawn(.{}, minhaFuncao, .{1});
+            \\    defer t1.join();
             \\
-            \\    // Wait for all tasks to complete
-            \\    try group.await(io);
+            \\    const t2 = try std.Thread.spawn(.{}, minhaFuncao, .{2});
+            \\    defer t2.join();
+            \\    // join() blocks main until thread finishes
             \\
             \\    // ========================================
-            \\    // std.Io.Mutex - Mutual Exclusion
+            \\    // 2. MUTEX - Mutual Exclusion
+            \\    // ========================================
+            \\    // std.Io.Mutex - Zig 0.16 API
+            \\    // std.Thread.Mutex DOES NOT EXIST!
+            \\    const ThreadSafeCounter = struct {
+            \\        mutex: std.Io.Mutex = std.Io.Mutex.init,
+            \\        value: u32 = 0,
+            \\
+            \\        pub fn increment(self: *@This(), io: std.Io) !void {
+            \\            try self.mutex.lock(io);
+            \\            defer self.mutex.unlock(io);
+            \\            self.value += 1;
+            \\        }
+            \\    };
+            \\
+            \\    // ========================================
+            \\    // 3. TRYLOCK vs LOCK
             \\    // ========================================
             \\    var mutex: std.Io.Mutex = .init;
             \\    defer mutex.deinit();
             \\
-            \\    // Lock before accessing shared data
+            \\    // lock() - blocks until acquired
             \\    try mutex.lock(io);
             \\    defer mutex.unlock(io);
             \\    // ... critical section ...
             \\
-            \\    // ========================================
-            \\    // std.Io.Condition - Wait/Notify
-            \\    // ========================================
-            \\    var cond: std.Io.Condition = .init;
-            \\    defer cond.deinit();
-            \\    var mutex2: std.Io.Mutex = .init;
-            \\    defer mutex2.deinit();
-            \\
-            \\    // Wait for signal
-            \\    try mutex2.lock(io);
-            \\    defer mutex2.unlock(io);
-            \\    while (!some_condition) {
-            \\        try cond.wait(io, &mutex2);
+            \\    // tryLock() - non-blocking, returns bool
+            \\    if (mutex.tryLock()) {
+            \\        defer mutex.unlock(io);
+            \\        // ... critical section ...
+            \\    } else {
+            \\        // could not acquire - do something else
             \\    }
             \\
-            \\    // Signal one thread
-            \\    cond.signal(io);
+            \\    // ========================================
+            \\    // 4. IO.GROUP - Concurrency (replaces Thread.Pool)
+            \\    // ========================================
+            \\    // std.Thread.Pool DOES NOT EXIST in 0.16!
+            \\    // std.Thread.WaitGroup DOES NOT EXIST in 0.16!
+            \\    // Use std.Io.Group + group.concurrent()
             \\
-            \\    // Broadcast to all waiting threads
-            \\    cond.broadcast(io);
-            \\}
-            \\n            \\// ========================================
-            \\// Task function for Group.concurrent
-            \\// ========================================
-            \\fn myTask(allocator: std.mem.Allocator, data: *MyData) void {
-            \\    // Do work...
-            \\    // Can use allocator and other args passed in
-            \\}
-            \\n            \\// ========================================
-            \\// Shared data with Mutex protection
-            \\// ========================================
-            \\const SharedData = struct {
-            \\    value: i32,
-            \\    mutex: std.Io.Mutex,
-            \\
-            \\    pub fn increment(self: *SharedData, io: std.Io) !void {
-            \\        try self.mutex.lock(io);
-            \\        defer self.mutex.unlock(io);
-            \\        self.value += 1;
+            \\    fn tarefa(io: std.Io, id: u32) void {
+            \\        _ = io;
+            \\        std.debug.print("task {} running\\n", .{id});
             \\    }
-            \\};
+            \\
+            \\    var group: std.Io.Group = .init;
+            \\    defer group.deinit();
+            \\
+            \\    try group.concurrent(io, tarefa, .{ io, 1 });
+            \\    try group.concurrent(io, tarefa, .{ io, 2 });
+            \\    try group.concurrent(io, tarefa, .{ io, 3 });
+            \\
+            \\    try group.await(io); // wait for all tasks
+            \\
+            \\    // ========================================
+            \\    // 5. COMPLETE EXAMPLE - Thread-safe counter
+            \\    // ========================================
+            \\    const Counter = struct {
+            \\        mutex: std.Io.Mutex = std.Io.Mutex.init,
+            \\        value: u32 = 0,
+            \\
+            \\        pub fn inc(self: *@This(), io: std.Io) !void {
+            \\            try self.mutex.lock(io);
+            \\            defer self.mutex.unlock(io);
+            \\            self.value += 1;
+            \\        }
+            \\    };
+            \\
+            \\    fn worker(counter: *Counter, io: std.Io, times: u32) void {
+            \\        for (0..times) |_| {
+            \\            counter.inc(io) catch return;
+            \\        }
+            \\    }
+            \\
+            \\    var counter = Counter{};
+            \\    var group2: std.Io.Group = .init;
+            \\    defer group2.deinit();
+            \\
+            \\    try group2.concurrent(io, worker, .{ &counter, io, 1000 });
+            \\    try group2.concurrent(io, worker, .{ &counter, io, 2000 });
+            \\    try group2.concurrent(io, worker, .{ &counter, io, 3000 });
+            \\
+            \\    try group2.await(io);
+            \\
+            \\    std.debug.print("Total: {}\\n", .{counter.value}); // should be 6000
+            \\}
+            \\n            \\## Migration Guide: 0.11/0.12 -> 0.16
+            \\------------------------------------
+            \\| Old (0.11/0.12)    | New (0.16)              |
+            \\|-------------------|--------------------------|
+            \\| std.Thread.Mutex  | std.Io.Mutex            |
+            \\| Mutex{}           | std.Io.Mutex.init       |
+            \\| mutex.lock()      | try mutex.lock(io)      |
+            \\| std.Thread.Pool   | std.Io.Group            |
+            \\| std.Thread.WaitGroup | std.Io.Group + await |
+            \\| pub fn main() !void | pub fn main(init: std.process.Init) !void |
+            \\n            \\## Key Concepts
+            \\---------------
+            \\- spawn: creates a thread
+            \\- join: waits for thread to finish
+            \\- lock/unlock: protects critical section (only one thread at a time)
+            \\- tryLock: non-blocking attempt, returns bool
+            \\- concurrent: spawns task in event loop
+            \\- group.await: waits for all tasks in group to finish
             \\n            \\## Key Points:
             \\-----------
-            \\1. Use std.Io.Group for managed thread pools
-            \\2. Use std.Io.Mutex for protecting shared state
-            \\3. Use std.Io.Condition for wait/notify patterns
-            \\4. std.Thread.Mutex does NOT exist!
-            \\5. Always unlock in defer or after critical section
-            \\6. Group.concurrent auto-manages thread creation
+            \\1. std.Thread.spawn for basic thread creation
+            \\2. std.Io.Group for managed task concurrency
+            \\3. std.Io.Mutex for protecting shared state (NOT std.Thread.Mutex!)
+            \\4. std.Io.Condition for wait/notify patterns
+            \\5. tryLock() returns bool, lock() blocks
+            \\6. Always unlock in defer or after critical section
             \\7. Pass Io context to all async operations
+            \\8. main() signature: pub fn main(init: std.process.Init) !void
         );
     } else if (std.mem.eql(u8, pattern, "time")) {
         try list.appendSlice(allocator,
