@@ -256,7 +256,7 @@ fn buildResourcesListResponse(allocator: std.mem.Allocator, id: ?std.json.Value)
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/static_lib\",\"name\":\"Static Library Patterns\",\"description\":\"Build static libraries with b.addLibrary\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/dynamic_lib\",\"name\":\"Dynamic Library Patterns\",\"description\":\"Build dynamic libraries with b.addLibrary\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/multimodule\",\"name\":\"Multi-Module Patterns\",\"description\":\"Multiple modules in one project\",\"mimeType\":\"text/zig\"},");
-    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/file_io\",\"name\":\"File I/O Patterns\",\"description\":\"File operations with std.Io.Dir.cwd() - REAL working examples\",\"mimeType\":\"text/zig\"},");
+    try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/file_io\",\"name\":\"File I/O Patterns\",\"description\":\"File operations + async computation with std.Io\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/time\",\"name\":\"Time APIs\",\"description\":\"Instant, Timer, Clock.now() for timing and timestamps\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/json_complete\",\"name\":\"JSON Complete\",\"description\":\"Full JSON parsing with all options and file I/O\",\"mimeType\":\"text/zig\"},");
     try list.appendSlice(allocator, "{\"uri\":\"zig://patterns/threads\",\"name\":\"Threading & Sync\",\"description\":\"std.Io.Mutex, std.Io.Condition, thread spawning\",\"mimeType\":\"text/zig\"},");
@@ -792,7 +792,7 @@ fn getResourceContent(uri: []const u8) []const u8 {
     } else if (std.mem.eql(u8, uri, "zig://patterns/file_io")) {
         return 
         \\// File I/O Patterns in Zig 0.16
-        \\// REAL EXAMPLES - Tested and working!
+        \\// Complete guide with std.Io.Dir and std.Io.File
         \\
         \\const std = @import("std");
         \\
@@ -801,71 +801,114 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\    const allocator = init.arena.allocator();
         \\
         \\    // ========================================
-        \\    // READ FILE - New API (std.Io.Dir.cwd())
+        \\    // BASIC FILE OPERATIONS
         \\    // ========================================
+        \\
+        \\    // READ entire file
         \\    const contents = try std.Io.Dir.cwd().readFileAlloc(
-        \\        io,                    // REQUIRED: io context
-        \\        "config.json",         // file path
-        \\        allocator,             // allocator
-        \\        .limited(1024 * 1024 * 50)  // max size limit
+        \\        io,                    // io context (REQUIRED)
+        \\        "data.txt",           // file path
+        \\        allocator,            // allocator
+        \\        .limited(1024 * 1024) // max size
         \\    );
         \\    defer allocator.free(contents);
         \\
-        \\    // ========================================
-        \\    // WRITE FILE - New API
-        \\    // ========================================
-        \\    const json_str = try std.json.stringifyAlloc(allocator, my_data, .{
-        \\        .whitespace = .indent_2,
-        \\    });
-        \\    defer allocator.free(json_str);
-        \\
-        \\    const file = try std.Io.Dir.cwd().createFile(io, "output.json", .{});
+        \\    // WRITE file (create or overwrite)
+        \\    const file = try std.Io.Dir.cwd().createFile(io, "output.txt", .{});
         \\    defer file.close(io);  // NOTE: requires io parameter!
-        \\    try file.writeStreamingAll(io, json_str);
+        \\    try file.writeStreamingAll(io, "Hello, Zig!");
         \\
-        \\    // ========================================
-        \\    // OPEN EXISTING FILE - New API
-        \\    // ========================================
-        \\    const existing_file = try std.Io.Dir.cwd().openFile(
-        \\        io,
-        \\        "data.txt",
-        \\        .{ .mode = .read_only }  // or .write_only, .read_write
+        \\    // OPEN existing file
+        \\    const existing = try std.Io.Dir.cwd().openFile(
+        \\        io, "data.txt", .{ .mode = .read_only }
         \\    );
-        \\    defer existing_file.close(io);
+        \\    defer existing.close(io);
         \\
-        \\    // Read with Reader
+        \\    // READ with Reader (line by line)
         \\    var buffer: [4096]u8 = undefined;
-        \\    var file_reader = existing_file.reader(io, &buffer);
-        \\    const reader = &file_reader.interface;
-        \\    const line = try reader.takeDelimiterInclusive('\n');
+        \\    var file_reader = existing.reader(io, &buffer);
+        \\    const line = try file_reader.interface.takeDelimiterInclusive('\n');
+        \\
+        \\    // FILE INFO (stat)
+        \\    const stat = try file.stat(io);
+        \\    _ = stat.size;      // file size in bytes
+        \\    _ = stat.mtime;    // modification time
+        \\    _ = stat.atime;    // access time
+        \\    _ = stat.ctime;    // change time
+        \\
+        \\    // DELETE file
+        \\    try std.Io.Dir.cwd().deleteFile(io, "temp.txt");
         \\
         \\    // ========================================
         \\    // DIRECTORY OPERATIONS
         \\    // ========================================
+        \\
         \\    // Create directory
-        \\    try std.Io.Dir.cwd().createDir(io, "my_directory", .default_dir);
+        \\    try std.Io.Dir.cwd().createDir(io, "my_folder", .default_dir);
         \\
         \\    // Open directory
-        \\    var dir = try std.Io.Dir.cwd().openDir(io, "my_directory", .{});
+        \\    var dir = try std.Io.Dir.cwd().openDir(io, "my_folder", .{});
         \\    defer dir.close(io);
         \\
         \\    // Check if exists
-        \\    var exists_dir = std.Io.Dir.cwd().openDir(io, "maybe_exists", .{}) catch null;
-        \\    if (exists_dir) |*d| {
-        \\        d.close(io);
-        \\    }
+        \\    const exists = std.Io.Dir.cwd().openDir(io, "maybe", .{}) catch null;
+        \\    if (exists) |d| d.close(io);
         \\}
         \\
-        \\## Key Differences from OLD API
-        \\// OLD (DEPRECATED): std.fs.cwd().readFileAlloc(allocator, path, max_size)
-        \\// NEW: std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_size))
-        \\//
-        \\// OLD (DEPRECATED): file.close()
-        \\// NEW: file.close(io)
-        \\//
-        \\// OLD (DEPRECATED): std.fs.cwd().createFile(path, .{})
-        \\// NEW: std.Io.Dir.cwd().createFile(io, path, .{})
+        \\## File I/O Key Points
+        \\// All file operations require 'io' parameter
+        \\// std.Io.Dir.cwd() - current working directory
+        \\// file.close(io) - NOTE: requires io parameter (not like old API)
+        \\// readFileAlloc(io, path, allocator, .limited(max)) - read entire file
+        \\// createFile(io, path, .{}) - create or overwrite
+        \\// openFile(io, path, .{ .mode = .read_only }) - open existing
+        \\// writeStreamingAll(io, data) - write all bytes
+        \\// file.reader(io, buffer) - create reader for streaming
+        \\// deleteFile(io, path) - delete file
+        \\// createDir(io, path, .default_dir) - create directory
+        \\// openDir(io, path, .{}) - open directory
         \\
+        \\## Async Operations
+        \\// File I/O in std.Io is SYNCHRONOUS by default
+        \\// For async computation, use Io.async():
+        \\
+        \\fn compute-heavy(n: u32) u64 {
+        \\    var sum: u64 = 0;
+        \\    for (0..n) |i| sum += i;
+        \\    return sum;
+        \\}
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const io = init.io;
+        \\
+        \\    // ASYNC computation (not file I/O)
+        \\    var future1 = io.async(compute-heavy, .{100_000});
+        \\    var future2 = io.async(compute-heavy, .{100_000});
+        \\
+        \\    const r1 = future1.await(io);
+        \\    const r2 = future2.await(io);
+        \\    _ = r1 + r2;
+        \\}
+        \\
+        \\## Sync vs Async Summary
+        \\| Operation | Type | Notes |
+        \\|-----------|------|-------|
+        \\| readFileAlloc | Sync | Blocks until complete |
+        \\| writeStreamingAll | Sync | Blocks until complete |
+        \\| file.reader | Sync | Streaming read |
+        \\| io.async() | Async | For computation |
+        \\| future.await() | Async | Wait for async result |
+        \\
+        \\## API Differences (OLD vs NEW)
+        \\// OLD (DEPRECATED):
+        \\//   std.fs.cwd().readFileAlloc(allocator, path, max)
+        \\//   file.close()
+        \\//   std.fs.cwd().createFile(path, .{})
+        \\//
+        \\// NEW (use this):
+        \\//   std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max))
+        \\//   file.close(io)
+        \\//   std.Io.Dir.cwd().createFile(io, path, .{})
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/time")) {
         return 
@@ -881,14 +924,7 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\    const io = init.io;
         \\    
         \\    // ========================================
-        \\    // POSIX NANOSLEEP - Sleep without blocking Io
-        \\    // ========================================
-        \\    var timespec: std.posix.timespec = .{ .sec = 1, .nsec = 0 };
-        \\    _ = std.posix.system.nanosleep(&timespec, &timespec);
-        \\    
-        \\    // ========================================
         \\    // CLOCK - Get current timestamp
-        \\    // Returns std.Io.Timestamp with nanosecond precision
         \\    // ========================================
         \\    const timestamp = std.Io.Clock.now(.real, io);
         \\    const seconds = timestamp.toSeconds();      // i64
@@ -898,93 +934,70 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\    // ========================================
         \\    // TIMESTAMP OPERATIONS
         \\    // ========================================
-        \\    // Create timestamp from components
-        \\    // Note: Timestamp only has fromNanoseconds(), use Duration for conversion
-        \\    
         \\    const ts_from_ns = std.Io.Timestamp.fromNanoseconds(1_000_000_000);
-        \\    
-        \\    // Calculate duration between timestamps
-        \\    const duration = timestamp.durationTo(future_ts);
-        \\    const duration_ms = duration.toMilliseconds();
-        \\    
-        \\    // Add/subtract duration from timestamp
+        \\    const duration = timestamp.durationTo(ts_from_ns);
         \\    const later = timestamp.addDuration(duration);
         \\    const earlier = timestamp.subDuration(duration);
-        \\    
-        \\    // Compare timestamps
-        \\    const is_future = ts_from_ns.toNanoseconds() > timestamp.toNanoseconds();  // greater than
-        \\    const is_past = ts_from_ns.toNanoseconds() < timestamp.toNanoseconds();     // less than
         \\
         \\    // ========================================
         \\    // DURATION - Time intervals
         \\    // ========================================
-        \\    // Create durations
         \\    const one_second = std.Io.Duration.fromSeconds(1);
         \\    const one_milli = std.Io.Duration.fromMilliseconds(1000);
         \\    const one_nano = std.Io.Duration.fromNanoseconds(1_000_000_000);
-        \\    
-        \\    // Sleep for a duration
-        \\    try std.Io.Duration.fromSeconds(1).sleep(io);
-        \\    
-        \\    // Duration constants
         \\    const zero_duration = std.Io.Duration.zero;
         \\    const max_duration = std.Io.Duration.max;
         \\
         \\    // ========================================
-        \\    // CLOCK-SPECIFIC TIMESTAMP (Clock.Timestamp)
-        \\    // For operations that need clock context
+        \\    // SLEEP & DELAY (3 ways)
         \\    // ========================================
-        \\    const clock_ts = std.Io.Clock.Timestamp.now(io, .real);
-        \\    
-        \\    // Wait until a specific time
-        \\    // try clock_ts.wait(io);
-        \\    
-        \\    // Convert between clocks
-        \\    const boot_ts = clock_ts.toClock(io, .boot);
-        \\    
-        \\    // Calculate time remaining until timestamp
-        \\    const time_remaining = clock_ts.durationFromNow(io);
-        \\    
-        \\    // Calculate time elapsed since timestamp
-        \\    const time_elapsed = clock_ts.untilNow(io);
+        \\    // Way 1: Io.sleep() - recommended
+        \\    try std.Io.sleep(io, std.Io.Duration.fromMilliseconds(500), .real);
         \\
+        \\    // Way 2: Clock.Timestamp.wait() - wait until specific time
+        \\    const target = timestamp.addDuration(std.Io.Duration.fromMilliseconds(300));
+        \\    try target.withClock(.real).wait(io);
+        \\
+        \\    // Way 3: POSIX nanosleep
+        \\    var timespec: std.posix.timespec = .{ .sec = 0, .nsec = 200_000_000 };
+        \\    _ = std.posix.system.nanosleep(&timespec, &timespec);
+        \\    
         \\    // ========================================
         \\    // CLOCK TYPES
         \\    // ========================================
-        \\    // .real    - Wall clock time (Unix epoch, affected by system time changes)
-        \\    // .awake   - Monotonic, excludes suspended time
-        \\    // .boot    - Monotonic, includes suspended time  
-        \\    // .cpu_process - CPU time used by process
-        \\    // .cpu_thread  - CPU time used by thread
         \\    const real_ts = std.Io.Clock.now(.real, io);
         \\    const awake_ts = std.Io.Clock.now(.awake, io);
-        \\    const boot_ts2 = std.Io.Clock.now(.boot, io);
-        \\
+        \\    const boot_ts = std.Io.Clock.now(.boot, io);
+        \\    const cpu_proc_ts = std.Io.Clock.now(.cpu_process, io);
+        \\    const cpu_thread_ts = std.Io.Clock.now(.cpu_thread, io);
+        \\    
         \\    // ========================================
-        \\    // C FALLBACK - When linking with libc
+        \\    // CLOCK-SPECIFIC TIMESTAMP
+        \\    // ========================================
+        \\    const clock_ts = std.Io.Clock.Timestamp.now(io, .real);
+        \\    const time_remaining = clock_ts.durationFromNow(io);
+        \\    const time_elapsed = clock_ts.untilNow(io);
+        \\    
+        \\    // ========================================
+        \\    // C FALLBACK
         \\    // ========================================
         \\    const c_time = c.time(null);
-        \\    
         \\    var ts: c.timespec = undefined;
         \\    _ = c.clock_gettime(c.CLOCK_MONOTONIC, &ts);
-        \\    const nanos_c = @as(u64, @intCast(ts.tv_sec)) * 1_000_000_000 + 
-        \\                   @as(u64, @intCast(ts.tv_nsec));
+        \\    const nanos_c = @as(u64, @intCast(ts.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(ts.tv_nsec));
         \\}
         \\
-        \\## Key Types and Methods
-        \\//
+        \\## Key Types
         \\// std.Io.Timestamp - Raw timestamp (nanoseconds since epoch)
         \\//   .now(io, clock)              - Get current time
-        \\//   .fromSeconds(s)              - Create from seconds
-        \\//   .fromMilliseconds(ms)        - Create from milliseconds
         \\//   .fromNanoseconds(ns)         - Create from nanoseconds
         \\//   .toSeconds()                 - Convert to seconds (i64)
         \\//   .toMilliseconds()            - Convert to milliseconds (i64)
         \\//   .toNanoseconds()             - Convert to nanoseconds (i96)
         \\//   .durationTo(other)           - Duration between timestamps
         \\//   .addDuration(d)              - Add duration to timestamp
-        \\//   .subDuration(d)              - Subtract duration from timestamp
-        \\//   .compare(op, other)          - Compare two timestamps
+        \\//   .subDuration(d)              - Subtract duration
+        \\//   .withClock(clock)            - Add clock context
         \\//   .zero                        - Zero timestamp constant
         \\//
         \\// std.Io.Clock.Timestamp - Clock-aware timestamp
@@ -1003,7 +1016,6 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\//   .fromNanoseconds(ns)         - Create from nanoseconds
         \\//   .toSeconds()                 - Convert to seconds
         \\//   .toMilliseconds()            - Convert to milliseconds
-        \\//   .sleep(io)                   - Sleep for this duration
         \\//   .zero                        - Zero duration
         \\//   .max                         - Maximum duration
         \\//
@@ -1017,9 +1029,20 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\//   .cpu_process  - CPU time for process
         \\//   .cpu_thread   - CPU time for thread
         \\
-        \\// ========================================
-        \\// COMPLETE BENCHMARK EXAMPLE
-        \\// ========================================
+        \\## Sleep & Delay Methods
+        \\// Method 1: Io.sleep() - recommended
+        \\try std.Io.sleep(io, std.Io.Duration.fromMilliseconds(500), .real);
+        \\
+        \\// Method 2: Clock.Timestamp.wait()
+        \\const target = timestamp.addDuration(std.Io.Duration.fromMilliseconds(300));
+        \\try target.withClock(.real).wait(io);
+        \\
+        \\// Method 3: POSIX nanosleep
+        \\var ts: std.posix.timespec = .{ .sec = 0, .nsec = 200_000_000 };
+        \\_ = std.posix.system.nanosleep(&ts, &ts);
+        \\
+        \\## Complete Benchmark Example
+        \\// Measure execution time with different clock types
         \\fn doWork() void {
         \\    var sum: u64 = 0;
         \\    for (0..1_000_000) |i| sum += i;
@@ -1045,25 +1068,27 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\    std.debug.print("CPU time:  {} ms\n", .{cpu_elapsed.toMilliseconds()});
         \\}
         \\
-        \\// ========================================
-        \\// CLOCK SELECTION GUIDE
-        \\// ========================================
-        \\// | Clock        | Use Case                                        |
-        \\// |--------------|------------------------------------------------|
-        \\// | `.real`      | Total elapsed time (wall-clock)                |
-        \\// | `.awake`     | Timeouts, rate limiting (not affected by NTP)  |
-        \\// | `.boot`      | Time since system boot (includes suspend)       |
-        \\// | `.cpu_process` | Benchmark CPU usage (entire process)         |
-        \\// | `.cpu_thread`  | Benchmark CPU usage (single thread)         |
+        \\## Clock Selection Guide
+        \\| Clock        | Use Case                                        |
+        \\|--------------|------------------------------------------------|
+        \\| `.real`      | Total elapsed time (wall-clock)                |
+        \\| `.awake`     | Timeouts, rate limiting (not affected by NTP) |
+        \\| `.boot`      | Time since system boot (includes suspend)       |
+        \\| `.cpu_process` | Benchmark CPU usage (entire process)         |
+        \\| `.cpu_thread`  | Benchmark CPU usage (single thread)        |
         \\
-        \\// ========================================
-        \\// HELPER FOR READABLE TIME
-        \\// ========================================
-        \\fn formatDuration(ns: i96, allocator: std.mem.Allocator) ![]u8 {
-        \\    if (ns < std.time.ns_per_ms) return std.fmt.allocPrint(allocator, "{} ns", .{ns});
-        \\    if (ns < std.time.ns_per_s) return std.fmt.allocPrint(allocator, "{} ms", .{ns / std.time.ns_per_ms});
-        \\    return std.fmt.allocPrint(allocator, "{} s", .{ns / std.time.ns_per_s});
-        \\}
+        \\## Key Points
+        \\1. std.Io.Clock.now(clock, io) - Get current timestamp
+        \\2. std.Io.Duration for time intervals (fromSeconds, fromMilliseconds)
+        \\3. timestamp.toSeconds/Milliseconds/Nanoseconds() - conversions
+        \\4. timestamp.durationTo(other) - time difference
+        \\5. timestamp.addDuration/subDuration() - time arithmetic
+        \\6. std.Io.sleep(io, duration, clock) - sleep (recommended)
+        \\7. target.withClock(clock).wait(io) - wait until timestamp
+        \\8. std.posix.system.nanosleep() - POSIX sleep
+        \\9. Clock types: .real, .awake, .boot, .cpu_process, .cpu_thread
+        \\10. Always warmup before benchmarking
+        \\11. Compare .real vs .cpu_process to detect I/O wait time
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/json_complete")) {
         return 
@@ -1654,6 +1679,127 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\  - Use 'json_complete' for full JSON with file reading examples
             \\  - Use 'time' for timing, benchmarks, and timestamps
             \\  - Use 'threads' for std.Io.Mutex, std.Io.Condition (std.Thread.Mutex DOES NOT EXIST!)
+        );
+    } else if (std.mem.eql(u8, pattern, "file_io")) {
+        return allocator.dupe(u8,
+            \\// File I/O Patterns in Zig 0.16
+            \\// Complete guide with std.Io.Dir and std.Io.File
+            \\
+            \\const std = @import("std");
+            \\
+            \\pub fn main(init: std.process.Init) !void {
+            \\    const io = init.io;
+            \\    const allocator = init.arena.allocator();
+            \\
+            \\    // ========================================
+            \\    // BASIC FILE OPERATIONS
+            \\    // ========================================
+            \\
+            \\    // READ entire file
+            \\    const contents = try std.Io.Dir.cwd().readFileAlloc(
+            \\        io,                    // io context (REQUIRED)
+            \\        "data.txt",           // file path
+            \\        allocator,            // allocator
+            \\        .limited(1024 * 1024) // max size
+            \\    );
+            \\    defer allocator.free(contents);
+            \\
+            \\    // WRITE file (create or overwrite)
+            \\    const file = try std.Io.Dir.cwd().createFile(io, "output.txt", .{});
+            \\    defer file.close(io);  // NOTE: requires io parameter!
+            \\    try file.writeStreamingAll(io, "Hello, Zig!");
+            \\
+            \\    // OPEN existing file
+            \\    const existing = try std.Io.Dir.cwd().openFile(
+            \\        io, "data.txt", .{ .mode = .read_only }
+            \\    );
+            \\    defer existing.close(io);
+            \\
+            \\    // READ with Reader (line by line)
+            \\    var buffer: [4096]u8 = undefined;
+            \\    var file_reader = existing.reader(io, &buffer);
+            \\    const line = try file_reader.interface.takeDelimiterInclusive('\\n');
+            \\
+            \\    // FILE INFO (stat)
+            \\    const stat = try file.stat(io);
+            \\    _ = stat.size;      // file size in bytes
+            \\    _ = stat.mtime;    // modification time
+            \\    _ = stat.atime;    // access time
+            \\    _ = stat.ctime;    // change time
+            \\
+            \\    // DELETE file
+            \\    try std.Io.Dir.cwd().deleteFile(io, "temp.txt");
+            \\
+            \\    // ========================================
+            \\    // DIRECTORY OPERATIONS
+            \\    // ========================================
+            \\
+            \\    // Create directory
+            \\    try std.Io.Dir.cwd().createDir(io, "my_folder", .default_dir);
+            \\
+            \\    // Open directory
+            \\    var dir = try std.Io.Dir.cwd().openDir(io, "my_folder", .{});
+            \\    defer dir.close(io);
+            \\
+            \\    // Check if exists
+            \\    const exists = std.Io.Dir.cwd().openDir(io, "maybe", .{}) catch null;
+            \\    if (exists) |d| d.close(io);
+            \\}
+            \\
+            \\## File I/O Key Points
+            \\// All file operations require 'io' parameter
+            \\// std.Io.Dir.cwd() - current working directory
+            \\// file.close(io) - NOTE: requires io parameter (not like old API)
+            \\// readFileAlloc(io, path, allocator, .limited(max)) - read entire file
+            \\// createFile(io, path, .{}) - create or overwrite
+            \\// openFile(io, path, .{ .mode = .read_only }) - open existing
+            \\// writeStreamingAll(io, data) - write all bytes
+            \\// file.reader(io, buffer) - create reader for streaming
+            \\// deleteFile(io, path) - delete file
+            \\// createDir(io, path, .default_dir) - create directory
+            \\// openDir(io, path, .{}) - open directory
+            \\
+            \\## Async Operations
+            \\// File I/O in std.Io is SYNCHRONOUS by default
+            \\// For async computation, use Io.async():
+            \\
+            \\fn compute-heavy(n: u32) u64 {
+            \\    var sum: u64 = 0;
+            \\    for (0..n) |i| sum += i;
+            \\    return sum;
+            \\}
+            \\
+            \\pub fn main(init: std.process.Init) !void {
+            \\    const io = init.io;
+            \\
+            \\    // ASYNC computation (not file I/O)
+            \\    var future1 = io.async(compute-heavy, .{100_000});
+            \\    var future2 = io.async(compute-heavy, .{100_000});
+            \\
+            \\    const r1 = future1.await(io);
+            \\    const r2 = future2.await(io);
+            \\    _ = r1 + r2;
+            \\}
+            \\
+            \\## Sync vs Async Summary
+            \\| Operation | Type | Notes |
+            \\|-----------|------|-------|
+            \\| readFileAlloc | Sync | Blocks until complete |
+            \\| writeStreamingAll | Sync | Blocks until complete |
+            \\| file.reader | Sync | Streaming read |
+            \\| io.async() | Async | For computation |
+            \\| future.await() | Async | Wait for async result |
+            \\
+            \\## API Differences (OLD vs NEW)
+            \\// OLD (DEPRECATED):
+            \\//   std.fs.cwd().readFileAlloc(allocator, path, max)
+            \\//   file.close()
+            \\//   std.fs.cwd().createFile(path, .{})
+            \\//
+            \\// NEW (use this):
+            \\//   std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max))
+            \\//   file.close(io)
+            \\//   std.Io.Dir.cwd().createFile(io, path, .{})
         );
     } else if (std.mem.eql(u8, pattern, "iommi")) {
         return allocator.dupe(u8,
@@ -2405,14 +2551,7 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\    const io = init.io;
             \\    
             \\    // ========================================
-            \\    // POSIX NANOSLEEP - Sleep without blocking Io
-            \\    // ========================================
-            \\    var timespec: std.posix.timespec = .{ .sec = 1, .nsec = 0 };
-            \\    _ = std.posix.system.nanosleep(&timespec, &timespec);
-            \\    
-            \\    // ========================================
             \\    // CLOCK - Get current timestamp
-            \\    // Returns std.Io.Timestamp with nanosecond precision
             \\    // ========================================
             \\    const timestamp = std.Io.Clock.now(.real, io);
             \\    const seconds = timestamp.toSeconds();      // i64
@@ -2422,87 +2561,105 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\    // ========================================
             \\    // TIMESTAMP OPERATIONS
             \\    // ========================================
-            \\    // Create timestamp from components
-            \\    // Note: Timestamp only has fromNanoseconds(), use Duration for conversion
             \\    const ts_from_ns = std.Io.Timestamp.fromNanoseconds(1_000_000_000);
-            \\    
-            \\    // Calculate duration between timestamps
             \\    const duration = timestamp.durationTo(ts_from_ns);
-            \\    const duration_ms = duration.toMilliseconds();
-            \\    
-            \\    // Add/subtract duration from timestamp
             \\    const later = timestamp.addDuration(duration);
             \\    const earlier = timestamp.subDuration(duration);
-            \\    
-            \\    // Compare timestamps
-            \\    const is_future = ts_from_ns.toNanoseconds() > timestamp.toNanoseconds();  // greater than
-            \\    const is_past = ts_from_ns.toNanoseconds() < timestamp.toNanoseconds();     // less than
             \\
             \\    // ========================================
             \\    // DURATION - Time intervals
             \\    // ========================================
-            \\    // Create durations
             \\    const one_second = std.Io.Duration.fromSeconds(1);
             \\    const one_milli = std.Io.Duration.fromMilliseconds(1000);
             \\    const one_nano = std.Io.Duration.fromNanoseconds(1_000_000_000);
-            \\    
-            \\    // Sleep for a duration
-            \\    try std.Io.Duration.fromSeconds(1).sleep(io);
-            \\    
-            \\    // Duration constants
             \\    const zero_duration = std.Io.Duration.zero;
             \\    const max_duration = std.Io.Duration.max;
             \\
             \\    // ========================================
-            \\    // CLOCK-SPECIFIC TIMESTAMP (Clock.Timestamp)
-            \\    // For operations that need clock context
+            \\    // SLEEP & DELAY (3 ways)
             \\    // ========================================
-            \\    const clock_ts = std.Io.Clock.Timestamp.now(io, .real);
-            \\    
-            \\    // Wait until a specific time
-            \\    // try clock_ts.wait(io);
-            \\    
-            \\    // Convert between clocks
-            \\    const boot_ts = clock_ts.toClock(io, .boot);
-            \\    
-            \\    // Calculate time remaining until timestamp
-            \\    const time_remaining = clock_ts.durationFromNow(io);
-            \\    
-            \\    // Calculate time elapsed since timestamp
-            \\    const time_elapsed = clock_ts.untilNow(io);
+            \\    // Way 1: Io.sleep() - recommended
+            \\    try std.Io.sleep(io, std.Io.Duration.fromMilliseconds(500), .real);
             \\
+            \\    // Way 2: Clock.Timestamp.wait() - wait until specific time
+            \\    const target = timestamp.addDuration(std.Io.Duration.fromMilliseconds(300));
+            \\    try target.withClock(.real).wait(io);
+            \\
+            \\    // Way 3: POSIX nanosleep
+            \\    var timespec: std.posix.timespec = .{ .sec = 0, .nsec = 200_000_000 };
+            \\    _ = std.posix.system.nanosleep(&timespec, &timespec);
+            \\    
             \\    // ========================================
             \\    // CLOCK TYPES
             \\    // ========================================
-            \\    // .real    - Wall clock time (Unix epoch, affected by system time changes)
-            \\    // .awake   - Monotonic, excludes suspended time
-            \\    // .boot    - Monotonic, includes suspended time  
-            \\    // .cpu_process - CPU time used by process
-            \\    // .cpu_thread  - CPU time used by thread
             \\    const real_ts = std.Io.Clock.now(.real, io);
             \\    const awake_ts = std.Io.Clock.now(.awake, io);
-            \\    const boot_ts2 = std.Io.Clock.now(.boot, io);
+            \\    const boot_ts = std.Io.Clock.now(.boot, io);
             \\    const cpu_proc_ts = std.Io.Clock.now(.cpu_process, io);
             \\    const cpu_thread_ts = std.Io.Clock.now(.cpu_thread, io);
-            \\}
-            \\n            \\// ========================================
-            \\// Time with Arena Allocator (recommended for main)
-            \\// ========================================
-            \\pub fn main(init: std.process.Init) !void {
-            \\    const allocator = init.arena.allocator();
-            \\    const io = init.io;
-            \\
-            \\    // Get current time
-            \\    const now = std.Io.Clock.now(.real, io);
             \\    
-            \\    // Format time (using PrintOptions)
-            \\    var buf: [64]u8 = undefined;
-            \\    var f = std.Io.BufferedWriter(.{}, std.Io.File.stdout(), io, &buf);
-            \\    try f.writer().print("{}\n", .{now});
-            \\    try f.flush();
+            \\    // ========================================
+            \\    // CLOCK-SPECIFIC TIMESTAMP
+            \\    // ========================================
+            \\    const clock_ts = std.Io.Clock.Timestamp.now(io, .real);
+            \\    const time_remaining = clock_ts.durationFromNow(io);
+            \\    const time_elapsed = clock_ts.untilNow(io);
             \\}
-            \\n            \\## Complete Benchmark Example:
-            \\-----------
+            \\n            \\## Key Types
+            \\// std.Io.Timestamp - Raw timestamp (nanoseconds since epoch)
+            \\//   .now(io, clock)              - Get current time
+            \\//   .fromNanoseconds(ns)         - Create from nanoseconds
+            \\//   .toSeconds()                 - Convert to seconds (i64)
+            \\//   .toMilliseconds()            - Convert to milliseconds (i64)
+            \\//   .toNanoseconds()             - Convert to nanoseconds (i96)
+            \\//   .durationTo(other)           - Duration between timestamps
+            \\//   .addDuration(d)              - Add duration to timestamp
+            \\//   .subDuration(d)              - Subtract duration
+            \\//   .withClock(clock)            - Add clock context
+            \\//   .zero                        - Zero timestamp constant
+            \\//
+            \\// std.Io.Clock.Timestamp - Clock-aware timestamp
+            \\//   .now(io, clock)              - Get current time with clock context
+            \\//   .wait(io)                    - Sleep until this time
+            \\//   .toClock(io, clock)          - Convert to different clock
+            \\//   .durationFromNow(io)         - Time until this timestamp
+            \\//   .untilNow(io)                - Time since this timestamp
+            \\//   .addDuration(d)              - Add duration
+            \\//   .subDuration(d)              - Subtract duration
+            \\//   .durationTo(other)           - Duration to another timestamp
+            \\//
+            \\// std.Io.Duration - Time intervals
+            \\//   .fromSeconds(s)              - Create from seconds
+            \\//   .fromMilliseconds(ms)        - Create from milliseconds
+            \\//   .fromNanoseconds(ns)         - Create from nanoseconds
+            \\//   .toSeconds()                 - Convert to seconds
+            \\//   .toMilliseconds()            - Convert to milliseconds
+            \\//   .zero                        - Zero duration
+            \\//   .max                         - Maximum duration
+            \\//
+            \\// std.Io.Clock.Duration - Clock-aware duration
+            \\//   .sleep(io)                   - Sleep on specific clock
+            \\//
+            \\// Clock Types:
+            \\//   .real         - Wall clock (Unix epoch, affected by NTP)
+            \\//   .awake        - Monotonic, excludes suspend time
+            \\//   .boot         - Monotonic, includes suspend time
+            \\//   .cpu_process  - CPU time for process
+            \\//   .cpu_thread   - CPU time for thread
+            \\
+            \\## Sleep & Delay Methods
+            \\// Method 1: Io.sleep() - recommended
+            \\try std.Io.sleep(io, std.Io.Duration.fromMilliseconds(500), .real);
+            \\
+            \\// Method 2: Clock.Timestamp.wait()
+            \\const target = timestamp.addDuration(std.Io.Duration.fromMilliseconds(300));
+            \\try target.withClock(.real).wait(io);
+            \\
+            \\// Method 3: POSIX nanosleep
+            \\var ts: std.posix.timespec = .{ .sec = 0, .nsec = 200_000_000 };
+            \\_ = std.posix.system.nanosleep(&ts, &ts);
+            \\
+            \\## Complete Benchmark Example
             \\// Measure execution time with different clock types
             \\fn doWork() void {
             \\    var sum: u64 = 0;
@@ -2528,35 +2685,28 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\    std.debug.print("Real time: {} ms\n", .{real_elapsed.toMilliseconds()});
             \\    std.debug.print("CPU time:  {} ms\n", .{cpu_elapsed.toMilliseconds()});
             \\}
-            \\n            \\## Clock Selection Guide:
-            \\-----------
+            \\
+            \\## Clock Selection Guide
             \\| Clock        | Use Case                                        |
             \\|--------------|------------------------------------------------|
             \\| `.real`      | Total elapsed time (wall-clock)                |
             \\| `.awake`     | Timeouts, rate limiting (not affected by NTP) |
-            \\| `.boot`      | Time since system boot (includes suspend)     |
-            \\| `.cpu_process` | Benchmark CPU usage (entire process)       |
+            \\| `.boot`      | Time since system boot (includes suspend)       |
+            \\| `.cpu_process` | Benchmark CPU usage (entire process)         |
             \\| `.cpu_thread`  | Benchmark CPU usage (single thread)        |
-            \\n            \\## Helper for Readable Time:
-            \\-----------
-            \\// Format nanoseconds to human-readable string
-            \\fn formatDuration(ns: i96, allocator: std.mem.Allocator) ![]u8 {
-            \\    if (ns < std.time.ns_per_ms) return std.fmt.allocPrint(allocator, "{} ns", .{ns});
-            \\    if (ns < std.time.ns_per_s) return std.fmt.allocPrint(allocator, "{} ms", .{ns / std.time.ns_per_ms});
-            \\    return std.fmt.allocPrint(allocator, "{} s", .{ns / std.time.ns_per_s});
-            \\}
-            \\n            \\## Key Points:
-            \\-----------
+            \\
+            \\## Key Points
             \\1. std.Io.Clock.now(clock, io) - Get current timestamp
-            \\2. std.Io.Duration for time intervals (fromSeconds, fromMilliseconds, etc.)
-            \\3. timestamp.toSeconds(), .toMilliseconds(), .toNanoseconds() - conversions
-            \\4. timestamp.durationTo(other) - time difference between timestamps
-            \\5. timestamp.addDuration(), .subDuration() - time arithmetic
-            \\6. duration.sleep(io) - sleep for duration
-            \\7. Clock types: .real (wall), .awake (monotonic), .boot, .cpu_process, .cpu_thread
-            \\8. Always do warmup before benchmarking to avoid JIT effects
-            \\9. Compare .real vs .cpu_process to detect I/O wait time
-            \\10. std.posix.system.nanosleep() for POSIX sleep
+            \\2. std.Io.Duration for time intervals (fromSeconds, fromMilliseconds)
+            \\3. timestamp.toSeconds/Milliseconds/Nanoseconds() - conversions
+            \\4. timestamp.durationTo(other) - time difference
+            \\5. timestamp.addDuration/subDuration() - time arithmetic
+            \\6. std.Io.sleep(io, duration, clock) - sleep (recommended)
+            \\7. target.withClock(clock).wait(io) - wait until timestamp
+            \\8. std.posix.system.nanosleep() - POSIX sleep
+            \\9. Clock types: .real, .awake, .boot, .cpu_process, .cpu_thread
+            \\10. Always warmup before benchmarking
+            \\11. Compare .real vs .cpu_process to detect I/O wait time
         );
     } else {
         try list.appendSlice(allocator, "Unknown pattern. Use 'list' to see available patterns.");
