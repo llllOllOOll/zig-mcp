@@ -1017,6 +1017,53 @@ fn getResourceContent(uri: []const u8) []const u8 {
         \\//   .cpu_process  - CPU time for process
         \\//   .cpu_thread   - CPU time for thread
         \\
+        \\// ========================================
+        \\// COMPLETE BENCHMARK EXAMPLE
+        \\// ========================================
+        \\fn doWork() void {
+        \\    var sum: u64 = 0;
+        \\    for (0..1_000_000) |i| sum += i;
+        \\    _ = sum;
+        \\}
+        \\
+        \\pub fn main(init: std.process.Init) !void {
+        \\    const io = init.io;
+        \\    
+        \\    // Warmup - run once before measuring
+        \\    doWork();
+        \\    
+        \\    // Measure with different clocks
+        \\    const real_start = std.Io.Clock.now(.real, io);
+        \\    const cpu_start = std.Io.Clock.now(.cpu_process, io);
+        \\    
+        \\    doWork();
+        \\    
+        \\    const real_elapsed = real_start.durationTo(std.Io.Clock.now(.real, io));
+        \\    const cpu_elapsed = cpu_start.durationTo(std.Io.Clock.now(.cpu_process, io));
+        \\    
+        \\    std.debug.print("Real time: {} ms\n", .{real_elapsed.toMilliseconds()});
+        \\    std.debug.print("CPU time:  {} ms\n", .{cpu_elapsed.toMilliseconds()});
+        \\}
+        \\
+        \\// ========================================
+        \\// CLOCK SELECTION GUIDE
+        \\// ========================================
+        \\// | Clock        | Use Case                                        |
+        \\// |--------------|------------------------------------------------|
+        \\// | `.real`      | Total elapsed time (wall-clock)                |
+        \\// | `.awake`     | Timeouts, rate limiting (not affected by NTP)  |
+        \\// | `.boot`      | Time since system boot (includes suspend)       |
+        \\// | `.cpu_process` | Benchmark CPU usage (entire process)         |
+        \\// | `.cpu_thread`  | Benchmark CPU usage (single thread)         |
+        \\
+        \\// ========================================
+        \\// HELPER FOR READABLE TIME
+        \\// ========================================
+        \\fn formatDuration(ns: i96, allocator: std.mem.Allocator) ![]u8 {
+        \\    if (ns < std.time.ns_per_ms) return std.fmt.allocPrint(allocator, "{} ns", .{ns});
+        \\    if (ns < std.time.ns_per_s) return std.fmt.allocPrint(allocator, "{} ms", .{ns / std.time.ns_per_ms});
+        \\    return std.fmt.allocPrint(allocator, "{} s", .{ns / std.time.ns_per_s});
+        \\}
         ;
     } else if (std.mem.eql(u8, uri, "zig://patterns/json_complete")) {
         return 
@@ -2454,15 +2501,62 @@ fn getPatternDocumentation(allocator: std.mem.Allocator, pattern: []const u8) ![
             \\    try f.writer().print("{}\n", .{now});
             \\    try f.flush();
             \\}
+            \\n            \\## Complete Benchmark Example:
+            \\-----------
+            \\// Measure execution time with different clock types
+            \\fn doWork() void {
+            \\    var sum: u64 = 0;
+            \\    for (0..1_000_000) |i| sum += i;
+            \\    _ = sum;
+            \\}
+            \\
+            \\pub fn main(init: std.process.Init) !void {
+            \\    const io = init.io;
+            \\    
+            \\    // Warmup - run once before measuring
+            \\    doWork();
+            \\    
+            \\    // Measure with different clocks
+            \\    const real_start = std.Io.Clock.now(.real, io);
+            \\    const cpu_start = std.Io.Clock.now(.cpu_process, io);
+            \\    
+            \\    doWork();
+            \\    
+            \\    const real_elapsed = real_start.durationTo(std.Io.Clock.now(.real, io));
+            \\    const cpu_elapsed = cpu_start.durationTo(std.Io.Clock.now(.cpu_process, io));
+            \\    
+            \\    std.debug.print("Real time: {} ms\n", .{real_elapsed.toMilliseconds()});
+            \\    std.debug.print("CPU time:  {} ms\n", .{cpu_elapsed.toMilliseconds()});
+            \\}
+            \\n            \\## Clock Selection Guide:
+            \\-----------
+            \\| Clock        | Use Case                                        |
+            \\|--------------|------------------------------------------------|
+            \\| `.real`      | Total elapsed time (wall-clock)                |
+            \\| `.awake`     | Timeouts, rate limiting (not affected by NTP) |
+            \\| `.boot`      | Time since system boot (includes suspend)     |
+            \\| `.cpu_process` | Benchmark CPU usage (entire process)       |
+            \\| `.cpu_thread`  | Benchmark CPU usage (single thread)        |
+            \\n            \\## Helper for Readable Time:
+            \\-----------
+            \\// Format nanoseconds to human-readable string
+            \\fn formatDuration(ns: i96, allocator: std.mem.Allocator) ![]u8 {
+            \\    if (ns < std.time.ns_per_ms) return std.fmt.allocPrint(allocator, "{} ns", .{ns});
+            \\    if (ns < std.time.ns_per_s) return std.fmt.allocPrint(allocator, "{} ms", .{ns / std.time.ns_per_ms});
+            \\    return std.fmt.allocPrint(allocator, "{} s", .{ns / std.time.ns_per_s});
+            \\}
             \\n            \\## Key Points:
             \\-----------
             \\1. std.Io.Clock.now(clock, io) - Get current timestamp
             \\2. std.Io.Duration for time intervals (fromSeconds, fromMilliseconds, etc.)
             \\3. timestamp.toSeconds(), .toMilliseconds(), .toNanoseconds() - conversions
-            \\4. timestamp.addDuration(), .subDuration() - time arithmetic
-            \\5. duration.sleep(io) - sleep for duration
-            \\6. Clock types: .real (wall), .awake (monotonic), .boot, .cpu_process, .cpu_thread
-            \\7. std.posix.system.nanosleep() for POSIX sleep
+            \\4. timestamp.durationTo(other) - time difference between timestamps
+            \\5. timestamp.addDuration(), .subDuration() - time arithmetic
+            \\6. duration.sleep(io) - sleep for duration
+            \\7. Clock types: .real (wall), .awake (monotonic), .boot, .cpu_process, .cpu_thread
+            \\8. Always do warmup before benchmarking to avoid JIT effects
+            \\9. Compare .real vs .cpu_process to detect I/O wait time
+            \\10. std.posix.system.nanosleep() for POSIX sleep
         );
     } else {
         try list.appendSlice(allocator, "Unknown pattern. Use 'list' to see available patterns.");
